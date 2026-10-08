@@ -1,0 +1,883 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Triki Live</title>
+<style>
+:root{
+  --bg:#0e1014; --panel:#161920; --panel2:#1c2029; --line:#272c37; --text:#e7e9ef; --muted:#8a92a6;
+  --ok:#6fdc8c; --warn:#f2b53a; --bad:#ff6b6b; --roll:#4ea1ff; --pitch:#9aa3b5; --yaw:#ff6b8b; --mag:#e7e9ef;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+h1{font-size:18px;margin:0 10px 0 0;letter-spacing:.3px}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:0 0 10px;font-weight:600}
+button,select,input{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 12px}
+button{cursor:pointer}
+button:hover{border-color:#3a4150}
+button.primary{background:#1f6f3d;border-color:#2a8a4e}
+button.primary:hover{background:#25804a}
+button.rec.on{background:#7a1f2a;border-color:#a52a3a}
+button:disabled{opacity:.4;cursor:default}
+input[type=number]{width:90px}
+input[type=text]{width:220px;font-family:ui-monospace,Consolas,monospace}
+.pill{padding:4px 10px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);font-size:13px}
+.pill.ok{color:var(--ok);border-color:#2c5a3a}.pill.warn{color:var(--warn);border-color:#5e4a1c}.pill.bad{color:var(--bad);border-color:#5e2626}
+.spacer{flex:1}
+main{display:grid;gap:14px;padding:14px 18px;grid-template-columns:minmax(0,1fr) minmax(0,1.5fr)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
+.full{grid-column:1/-1}
+.row3{grid-column:1/-1;display:grid;gap:14px;grid-template-columns:repeat(3,minmax(0,1fr))}
+#cv3d{width:100%;height:330px;display:block}
+.charts canvas{width:100%;height:150px;display:block;margin-bottom:8px;background:var(--panel2);border-radius:8px}
+.angles{display:flex;gap:16px;justify-content:center;font-variant-numeric:tabular-nums;margin:6px 0 10px}
+.angles b{font-size:18px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.last{background:var(--panel2);border-radius:10px;padding:12px;margin-bottom:10px;min-height:92px}
+.last .name{font-size:22px;font-weight:700}
+.last .meta{color:var(--muted);font-variant-numeric:tabular-nums}
+.flags{color:var(--warn);font-size:13px}
+#feed{max-height:260px;overflow:auto;font-variant-numeric:tabular-nums}
+#feed div{padding:6px 2px;border-bottom:1px solid var(--line)}
+#feed .t{color:var(--muted);display:inline-block;width:52px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+td{padding:4px 2px;border-bottom:1px solid var(--line);vertical-align:top}
+td:first-child{color:var(--muted);width:46%}
+.check div{padding:3px 0}
+.check .i{display:inline-block;width:22px}
+.form label{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:5px 0}
+.form .axes select{width:74px;padding:6px}
+#log{font:12px/1.5 ui-monospace,Consolas,monospace;max-height:180px;overflow:auto;white-space:pre-wrap;color:#c2c8d6}
+#log .w{color:var(--warn)}#log .e{color:var(--bad)}#log .o{color:var(--ok)}
+.hint{color:var(--muted);font-size:13px}
+.banner{display:none;margin:12px 18px 0;padding:10px 14px;border-radius:10px;background:#3a2a10;border:1px solid #6b4d16;color:#ffd58a}
+@media (max-width:1000px){main{grid-template-columns:1fr}.row3{grid-template-columns:1fr}}
+@media (max-width:600px){#cv3d{height:240px}header{padding:10px 12px;gap:8px}main{padding:10px 12px}.charts canvas{height:130px}h1{font-size:16px}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Triki Live</h1>
+  <span id="status" class="pill">не підключено</span>
+  <button id="bConnect" class="primary">Підключити Triki</button>
+  <button id="bConnectAll" title="Якщо Triki не знаходиться за назвою">Усі пристрої</button>
+  <button id="bDemo">Демо без Triki</button>
+  <button id="bDisconnect" disabled>Відключити</button>
+  <span class="spacer"></span>
+  <button id="bRec" class="rec" disabled>● Запис</button>
+</header>
+<div id="banner" class="banner"></div>
+
+<main>
+  <section class="card">
+    <h2>Дошка (орієнтація наживо)</h2>
+    <canvas id="cv3d"></canvas>
+    <div class="angles">
+      <span>крен <b id="aRoll" style="color:var(--roll)">0°</b></span>
+      <span>тангаж <b id="aPitch" style="color:var(--pitch)">0°</b></span>
+      <span>рискання <b id="aYaw" style="color:var(--yaw)">0°</b></span>
+    </div>
+    <div class="btns">
+      <button id="bResetQ">Скинути орієнтацію</button>
+      <button id="bLed" disabled>LED</button>
+      <button id="bCalib" disabled>Калібрувати (2 с спокою)</button>
+    </div>
+    <p class="hint">Зелена смужка — ніс дошки, помаранчевий низ — видно, коли дошка перевернута.</p>
+  </section>
+
+  <section class="card charts">
+    <h2>Сигнали, останні 5 с</h2>
+    <canvas id="cvMag"></canvas>
+    <canvas id="cvAcc"></canvas>
+    <canvas id="cvGyro"></canvas>
+  </section>
+
+  <div class="row3">
+    <section class="card">
+      <h2>Трюки</h2>
+      <div class="last" id="last"><div class="meta">Поки нічого. Зроби ollie або підкинь Triki на ліжко.</div></div>
+      <div id="summary" class="hint"></div>
+      <div id="feed"></div>
+    </section>
+
+    <section class="card">
+      <h2>Чи працює?</h2>
+      <div class="check" id="check"></div>
+      <h2 style="margin-top:14px">Діагностика</h2>
+      <table id="diag"></table>
+    </section>
+
+    <section class="card form">
+      <h2>Налаштування</h2>
+      <label>Частота сенсора
+        <select id="wakePreset">
+          <option value="104" selected>104 Гц (як Żappka)</option>
+          <option value="208">208 Гц</option>
+          <option value="416">416 Гц</option>
+          <option value="52">52 Гц</option>
+        </select></label>
+      <label>Команда старту
+        <input type="text" id="wake" value="20 10 00 D0 07 68 00 03"></label>
+      <div class="btns" style="margin:4px 0 10px">
+        <button id="bWake" disabled>Надіслати команду</button>
+        <button id="bSweep" disabled>Тест швидкості</button>
+      </div>
+      <label>Не давати заснути (команда щосекунди) <input type="checkbox" id="keepalive" checked></label>
+      <label>Автоперепідключення <input type="checkbox" id="autoRe" checked></label>
+      <label>LSB на 1 g (акселерометр) <input type="number" id="accScale" value="2048" step="1"></label>
+      <label>LSB на 1 °/с (гіроскоп) <input type="number" id="gyroScale" value="16.4" step="0.1"></label>
+      <label class="axes">Осі Triki → крен / тангаж / рискання
+        <span><select id="mapR"></select> <select id="mapP"></select> <select id="mapY"></select></span></label>
+      <label>Стійка
+        <select id="stance"><option value="regular">regular</option><option value="goofy">goofy</option></select></label>
+      <label>Звук на трюк <input type="checkbox" id="beep" checked></label>
+      <p class="hint">Якщо kickflip визначається як heelflip — постав мінус на осі крену. Якщо фліпи видно як shuvit — поміняй осі місцями.</p>
+    </section>
+  </div>
+
+  <section class="card full" id="exportBox" style="display:none">
+    <h2>Експорт</h2>
+    <div class="hint" id="exportName"></div>
+    <textarea id="exportText" readonly style="width:100%;height:140px;margin:8px 0;background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:8px;font:11px ui-monospace,monospace"></textarea>
+    <div class="btns">
+      <button id="bCopy">Копіювати</button>
+      <button onclick="document.getElementById('exportBox').style.display='none'">Сховати</button>
+    </div>
+  </section>
+
+  <section class="card full">
+    <h2>Журнал</h2>
+    <div class="btns" style="margin-bottom:8px"><button id="bShareLog">Поділитись журналом</button></div>
+    <div id="log"></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+// ================= протокол (github.com/Wojtekb30/unofficial-triki-api-py) =================
+const NUS  = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const RX   = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+const TX   = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+const LEDU = '6e400004-b5a3-f393-e0a9-e50e24dcca9e';
+const SLEEP = [0x20,0,0,0,0,0,0];
+const SAT = 32766;
+
+// ================= пороги розпізнавання (як у triki_analyze.py) =================
+const IMPACT_G = 2.0, MIN_AIR = 0.15, MAX_AIR = 1.2, FREEFALL_G = 0.6, MIN_ROT = 150, LANDED_MAX_DPS = 300;
+const KP = 2.0; // корекція орієнтації акселерометром
+
+const $ = id => document.getElementById(id);
+const S = { accScale:2048, gyroScale:16.4, map:['x','y','z'], stance:'regular' };
+const st = {
+  source:null, device:null, rx:null, led:null, ledOn:false, battery:null,
+  bias:[0,0,0], buf:[], n:0, unknown:0, lastHex:'—', sat:0,
+  arrivals:[], fs:52, q:[1,0,0,0], tricks:[], lastLandN:-1,
+  calib:null, calibInfo:null, rec:null, demoTimer:null, detTimer:null, audio:null,
+  connectedAt:0, stillG:null, wantBle:false, reconnecting:false, svcChars:null,
+  lastMotion:performance.now(), lastPacket:0, pktSizes:{}, sleepLog:[], sweeping:false, kaTimer:null,
+  gattQ: Promise.resolve()
+};
+
+// ================= журнал =================
+function log(msg, cls=''){
+  const d = document.createElement('div');
+  if (cls) d.className = cls;
+  d.textContent = new Date().toLocaleTimeString() + '  ' + msg;
+  const L = $('log'); L.prepend(d);
+  while (L.childNodes.length > 200) L.lastChild.remove();
+}
+function setStatus(text, cls=''){ const s=$('status'); s.textContent=text; s.className='pill '+cls; }
+function banner(html){ const b=$('banner'); if(!html){b.style.display='none';return;} b.innerHTML=html; b.style.display='block'; }
+
+// ================= налаштування =================
+const AXES = ['x','-x','y','-y','z','-z'];
+for (const [id,def] of [['mapR','x'],['mapP','y'],['mapY','z']]) {
+  const s = $(id); for (const a of AXES) { const o=document.createElement('option'); o.value=o.textContent=a; s.appendChild(o); }
+  s.value = def;
+  s.onchange = () => { S.map = [$('mapR').value,$('mapP').value,$('mapY').value]; log('Осі: '+S.map.join(', ')); };
+}
+$('accScale').onchange = e => { S.accScale = +e.target.value || 2048; };
+$('gyroScale').onchange = e => { S.gyroScale = +e.target.value || 16.4; };
+$('stance').onchange = e => { S.stance = e.target.value; };
+function setRateInWake(v){
+  const b = parseHex($('wake').value);
+  if (b.length >= 7) { b[5] = v & 255; b[6] = (v >> 8) & 255; $('wake').value = toHex(b); }
+}
+function rateFromWake(){ const b = parseHex($('wake').value); return b.length >= 7 ? b[5] | (b[6] << 8) : null; }
+$('wakePreset').onchange = e => { setRateInWake(+e.target.value); if (st.source === 'ble') restartStream(); };
+function parseHex(s){ return s.trim().split(/[\s,]+/).filter(Boolean).map(x=>parseInt(x.replace(/^0x/i,''),16)).filter(v=>!isNaN(v)); }
+function toHex(arr){ return Array.from(arr).map(v=>v.toString(16).toUpperCase().padStart(2,'0')).join(' '); }
+
+function mapAxes(v){
+  return S.map.map(a => { const i='xyz'.indexOf(a.slice(-1)); return a[0]==='-' ? -v[i] : v[i]; });
+}
+
+// ================= прийом даних =================
+function ingest(raw, now){
+  st.n++;
+  if (raw.some(v => Math.abs(v) >= SAT)) st.sat++;
+  if (st.rec) st.rec.rows.push([((now - st.rec.t0)/1000).toFixed(4), ...raw]);
+  if (st.calib) { st.calib.push(raw.slice()); }
+
+  st.arrivals.push(now);
+  while (st.arrivals.length && st.arrivals[0] < now - 2000) st.arrivals.shift();
+  if (now - st.connectedAt > 1500 && st.arrivals.length > 5) st.fs = 0.7*st.fs + 0.3*(st.arrivals.length/2);
+
+  const a = mapAxes(raw.slice(0,3)).map(v => v / S.accScale);
+  const g = mapAxes(raw.slice(3,6).map((v,i) => v - st.bias[i])).map(v => v / S.gyroScale);
+  const amag = Math.hypot(a[0],a[1],a[2]);
+  st.lastPacket = now;
+  if (Math.hypot(g[0],g[1],g[2]) > 15 || Math.abs(amag - 1) > 0.08) {
+    if (st.stillSince && now - st.stillSince > 500) { st.lastRest = (now - st.stillSince)/1000; st.motionStart = now; }
+    st.stillSince = null; st.lastMotion = now;
+  } else if (!st.stillSince) st.stillSince = now;
+  if (st.sweepCount != null) st.sweepCount.push(now);
+  st.buf.push({n:st.n, raw, a, g, amag});
+  const maxLen = Math.min(4000, Math.ceil(st.fs*6) + 50);
+  if (st.buf.length > maxLen) st.buf.splice(0, st.buf.length - maxLen);
+
+  mahony(g.map(v => v*Math.PI/180), a, 1/Math.max(1, st.fs));
+}
+
+// Пакет Triki = 22 00 + [гіроскоп xyz, акселерометр xyz] (int16 LE) — перевірено на реальному Triki.
+// Про всяк випадок розбираємо й кілька вимірів в одному пакеті.
+function splitFrames(bytes, dv){
+  const n = bytes.length, out = [];
+  if (n < 14 || bytes[0] !== 0x22) return out;
+  const rd = off => { const r = []; for (let k=0;k<6;k++) r.push(dv.getInt16(off+2*k, true)); return r; };
+  let all14 = n % 14 === 0; for (let i=0; all14 && i<n; i+=14) if (bytes[i] !== 0x22) all14 = false;
+  if (all14) for (let off=0; off<n; off+=14) out.push(rd(off+2));
+  else if ((n-2) % 12 === 0) for (let k=0; k<(n-2)/12; k++) out.push(rd(2+12*k));
+  else out.push(rd(2));
+  return out;
+}
+function onNotify(e){
+  const dv = e.target.value, now = performance.now();
+  const bytes = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
+  st.lastHex = toHex(bytes.slice(0, 20)) + (bytes.length > 20 ? ' …' : '');
+  if (!st.pktSizes[bytes.length]) log(`Розмір пакета: ${bytes.length} Б — ${toHex(bytes.slice(0, 32))}`);
+  st.pktSizes[bytes.length] = (st.pktSizes[bytes.length] || 0) + 1;
+  const frames = splitFrames(bytes, dv);
+  if (!frames.length) { st.unknown++; return; }
+  for (const f of frames) ingest([f[3], f[4], f[5], f[0], f[1], f[2]], now);   // → acc, gyro
+}
+
+// Усі операції Bluetooth по черзі: браузер не дозволяє дві одночасно.
+function gatt(fn){ const p = st.gattQ.then(fn); st.gattQ = p.catch(() => {}); return p; }
+
+async function connect(all){
+  if (!navigator.bluetooth) {
+    banner('Цей браузер не підтримує Bluetooth. На iPhone відкрий сторінку в браузері <b>Bluefy</b>, на ПК — у <b>Chrome</b> або <b>Edge</b>. «Демо без Triki» працює всюди.');
+    log('navigator.bluetooth відсутній', 'e'); return;
+  }
+  stopAll();
+  try {
+    const opts = all
+      ? { acceptAllDevices:true, optionalServices:[NUS,'battery_service'] }
+      : { filters:[{namePrefix:'Triki'},{namePrefix:'TRIKI'},{namePrefix:'triki'},{services:[NUS]}], optionalServices:[NUS,'battery_service'] };
+    setStatus('вибір пристрою…', 'warn');
+    const dev = await navigator.bluetooth.requestDevice(opts);
+    st.device = dev;
+    log(`Обрано: ${dev.name || '(без назви)'}`);
+    dev.addEventListener('gattserverdisconnected', onDisconnected);
+    st.wantBle = true;
+    st.source = 'ble'; resetSession();
+    await setupGatt();
+    afterStart();
+  } catch (e) {
+    if (e.name === 'NotFoundError') log('Вибір скасовано або Triki не знайдено. Він не повинен бути підключений до ПК чи Żappka.', 'w');
+    else log('Помилка: ' + e.message, 'e');
+    setStatus('не підключено', 'bad');
+    st.wantBle = false;
+  }
+}
+
+async function setupGatt(){
+  const dev = st.device;
+  setStatus('підключення…', 'warn');
+  const server = await dev.gatt.connect();
+  const svc = await server.getPrimaryService(NUS);
+  const tx = await svc.getCharacteristic(TX);
+  tx.removeEventListener('characteristicvaluechanged', onNotify);
+  tx.addEventListener('characteristicvaluechanged', onNotify);
+  await tx.startNotifications();
+  st.rx = await svc.getCharacteristic(RX);
+  try { st.led = await svc.getCharacteristic(LEDU); } catch { st.led = null; }
+  try {
+    const bs = await server.getPrimaryService('battery_service');
+    const bl = await bs.getCharacteristic('battery_level');
+    st.battery = (await bl.readValue()).getUint8(0);
+  } catch { st.battery = null; }
+  st.connectedAt = performance.now(); st.lastMotion = st.connectedAt; st.arrivals = [];
+  st.stillSince = null; st.motionStart = null; st.lastRest = null;
+  await writeRx(parseHex($('wake').value));
+  log(`Підключено ✓ ${dev.name || ''}${st.battery != null ? ' · батарея ' + st.battery + '%' : ''} · команда ${$('wake').value}`, 'o');
+  setStatus('підключено: ' + (dev.name || 'Triki'), 'ok');
+  const n0 = st.n;
+  setTimeout(() => {
+    if (st.source === 'ble' && st.device.gatt.connected && st.n === n0) {
+      log('За 3 с не прийшло жодного пакета. Натисни «Надіслати команду» або поворуши Triki.', 'w');
+      setStatus('підключено, але даних нема', 'warn');
+    }
+  }, 3000);
+  clearInterval(st.kaTimer);
+  st.kaTimer = setInterval(() => {
+    if ($('keepalive').checked && !st.sweeping && st.device && st.device.gatt.connected) writeRx(parseHex($('wake').value), true);
+  }, 1000);
+}
+
+async function writeRx(bytes, quiet){
+  if (!st.rx) return;
+  const data = new Uint8Array(bytes);
+  return gatt(async () => {
+    try {
+      if (st.rx.properties.writeWithoutResponse && st.rx.writeValueWithoutResponse) await st.rx.writeValueWithoutResponse(data);
+      else if (st.rx.writeValueWithResponse) await st.rx.writeValueWithResponse(data);
+      else await st.rx.writeValue(data);
+    } catch (e) { if (!quiet) log('Не вдалося записати команду: ' + e.message, 'e'); }
+  });
+}
+async function restartStream(){
+  await writeRx(SLEEP); await new Promise(r => setTimeout(r, 150));
+  await writeRx(parseHex($('wake').value));
+  st.arrivals = []; st.connectedAt = performance.now();
+  log(`Команда ${$('wake').value} (частота ${rateFromWake()} Гц)`);
+}
+
+function onDisconnected(){
+  clearInterval(st.kaTimer);
+  if (st.source !== 'ble') return;
+  const now = performance.now();
+  const dur = (now - st.connectedAt) / 1000;
+  const what = st.stillSince
+    ? `лежав нерухомо вже ${((now - st.stillSince)/1000).toFixed(1)} с`
+    : (st.motionStart && st.lastRest != null
+        ? `рух почався за ${((now - st.motionStart)/1000).toFixed(1)} с до відключення, перед тим спокій ${st.lastRest.toFixed(1)} с`
+        : 'під час руху');
+  const line = `${new Date().toLocaleTimeString()} | ${what} | з'єднання ${dur.toFixed(0)} с | ` +
+               `не давати заснути: ${$('keepalive').checked ? 'так' : 'ні'} | частота ${rateFromWake()}`;
+  st.sleepLog.push(line);
+  log('Triki відключився — ' + line.split('| ').slice(1).join('| '), 'w');
+  if (st.wantBle && $('autoRe').checked) reconnectLoop();
+  else { setStatus('з\'єднання втрачено', 'bad'); st.source = null; updateButtons(); }
+}
+async function reconnectLoop(){
+  if (st.reconnecting) return;
+  st.reconnecting = true;
+  let tries = 0;
+  while (st.wantBle && st.device && !st.device.gatt.connected) {
+    tries++;
+    setStatus(`перепідключаюсь… (${tries}) — поворуши Triki`, 'warn');
+    try { await setupGatt(); break; }
+    catch (e) { await new Promise(r => setTimeout(r, 1000)); }
+  }
+  st.reconnecting = false;
+}
+
+async function disconnect(){
+  st.wantBle = false;
+  clearInterval(st.kaTimer);
+  if (st.source === 'ble' && st.device && st.device.gatt.connected) {
+    try { if (st.led && st.ledOn) await gatt(() => st.led.writeValue(new Uint8Array([0]))); } catch {}
+    await writeRx(SLEEP);
+    st.source = null;
+    st.device.gatt.disconnect();
+    log('Відключено');
+  }
+  stopAll(); setStatus('не підключено');
+}
+
+async function sweep(){
+  if (st.source !== 'ble' || st.sweeping) return;
+  st.sweeping = true; $('bSweep').disabled = true;
+  log('=== Тест швидкості: весь час труси Triki (~25 с) ===', 'w');
+  const res = [];
+  for (const v of [104, 208, 416, 52]) {
+    setRateInWake(v); await restartStream();
+    await new Promise(r => setTimeout(r, 1000));
+    st.sweepCount = []; await new Promise(r => setTimeout(r, 5000));
+    const ts = st.sweepCount; st.sweepCount = null;
+    let holes = 0, maxGap = 0;
+    for (let i=1;i<ts.length;i++){ const d = (ts[i]-ts[i-1])/1000; if (d > 0.2) holes++; maxGap = Math.max(maxGap, d); }
+    const hz = ts.length / 5, holePct = ts.length > 1 ? 100*holes/(ts.length-1) : 100;
+    res.push({v, hz, holePct, maxGap});
+    log(`  ${v} Гц → дійшло ${hz.toFixed(1)} Гц, дірок ${holePct.toFixed(0)}%, найдовша ${maxGap.toFixed(2)} с`);
+  }
+  const best = res.reduce((b, r) => r.hz*(1-r.holePct/100) > b.hz*(1-b.holePct/100) ? r : b);
+  setRateInWake(best.v); $('wakePreset').value = String(best.v); await restartStream();
+  log(`Найкраще: ${best.v} Гц (дійшло ${best.hz.toFixed(1)} Гц). Залишаю.`, 'o');
+  st.sleepLog.push('Тест швидкості: ' + res.map(r => `${r.v}→${r.hz.toFixed(1)}Гц/${r.holePct.toFixed(0)}%`).join(', '));
+  st.sweeping = false; $('bSweep').disabled = false;
+}
+
+// ================= демо =================
+const DEMO_TRICKS = [
+  {name:'Ollie', roll:0, yaw:0, air:.42}, {name:'Kickflip', roll:360, yaw:0, air:.46},
+  {name:'Heelflip', roll:-360, yaw:0, air:.45}, {name:'BS pop shuvit', roll:0, yaw:180, air:.40},
+  {name:'FS pop shuvit', roll:0, yaw:-180, air:.40}, {name:'Varial kickflip', roll:360, yaw:180, air:.48},
+  {name:'360 flip', roll:360, yaw:360, air:.52}, {name:'Kickflip (недокручений)', roll:290, yaw:0, air:.44},
+  {name:'Double kickflip', roll:720, yaw:0, air:.55},
+];
+function gauss(){ let u=0,v=0; while(!u)u=Math.random(); while(!v)v=Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+function bump(s,t0,dur,total){ return (s>=t0 && s<=t0+dur) ? total*Math.PI/(2*dur)*Math.sin(Math.PI*(s-t0)/dur) : 0; }
+function spike(x,w,A){ return A*Math.exp(-0.5*(x/w)*(x/w)); }
+function demoSample(t){
+  let a=[0,0,1], g=[0,0,0], air=false;
+  if (t >= 3) {
+    const k = Math.floor((t-3)/3), tp = 3 + k*3 + 0.8, tr = DEMO_TRICKS[k % DEMO_TRICKS.length];
+    const T = tr.air, L = tp + T, s = t - tp;
+    air = s > 0.015 && t < L - 0.005;
+    if (air) a = [0,0,0];
+    a[2] += spike(s, .015, 4 + (k%3)*0.6) + spike(t-L, .015, 4.5 + (k%2));
+    if (k % 4 === 2) a[2] += spike(s-1.6, .01, 2.8);           // тріщина в асфальті — НЕ трюк
+    g[1] += bump(s,-.02,.12,-28) + bump(s,.12,.15,28);
+    if (tr.roll) g[0] += bump(s,.06,.62*T,tr.roll);
+    if (tr.yaw)  g[2] += bump(s,.07,.62*T,tr.yaw);
+  }
+  const rolling = t > 2.5 && !air;
+  for (let i=0;i<3;i++){
+    a[i] += gauss()*0.01 + (rolling ? gauss()*0.06 : 0);
+    g[i] += gauss()*0.6 + (rolling ? gauss()*2.5 : 0);
+  }
+  if (rolling) a[2] += 0.08*Math.sin(2*Math.PI*28*t);
+  g[0]+=3; g[1]-=2; g[2]+=1.5;  // дрейф, який має прибрати калібрування
+  const clip = v => Math.max(-32768, Math.min(32767, Math.round(v)));
+  return [...a.map(v=>clip(v*2048)), ...g.map(v=>clip(v*16.4))];
+}
+function startDemo(){
+  stopAll();
+  st.source = 'demo'; resetSession();
+  $('accScale').value = 2048; $('gyroScale').value = 16.4; S.accScale = 2048; S.gyroScale = 16.4;
+  const HZ = 52, t0 = performance.now(); let k = 0;
+  st.demoTimer = setInterval(() => {
+    const now = performance.now(), target = (now - t0)/1000*HZ;
+    while (k < target) { ingest(demoSample(k/HZ), now); k++; }
+  }, 20);
+  setStatus('демо (фейкові дані)', 'warn');
+  log('Демо: 3 с спокою, потім трюк кожні 3 с. Одна «тріщина в асфальті» не повинна рахуватись.');
+  afterStart();
+}
+
+// ================= сесія =================
+function resetSession(){
+  Object.assign(st, {buf:[], n:0, unknown:0, sat:0, arrivals:[], fs:52, q:[1,0,0,0], tricks:[], lastLandN:-1,
+                     bias:[0,0,0], calibInfo:null, stillG:null, connectedAt:performance.now(), lastHex:'—', pktSizes:{}});
+  $('feed').innerHTML = ''; $('summary').textContent = '';
+  $('last').innerHTML = '<div class="meta">Поки нічого. Зроби ollie або підкинь Triki на ліжко.</div>';
+}
+function afterStart(){
+  updateButtons(); startCalib(true);
+  clearInterval(st.detTimer); st.detTimer = setInterval(detect, 150);
+}
+function stopAll(){
+  clearInterval(st.demoTimer); st.demoTimer = null;
+  clearInterval(st.detTimer); st.detTimer = null;
+  if (st.rec) stopRec();
+  if (st.source === 'demo') st.source = null;
+  updateButtons();
+}
+function updateButtons(){
+  const on = !!st.source, ble = st.source === 'ble';
+  $('bDisconnect').disabled = !on; $('bRec').disabled = !on; $('bCalib').disabled = !on;
+  $('bLed').disabled = !(ble && st.led); $('bWake').disabled = !ble; $('bSweep').disabled = !ble || st.sweeping;
+}
+
+// ================= калібрування =================
+function startCalib(auto){
+  st.calib = [];
+  const ms = 2000;
+  if (!auto) log('Калібрування: не рухай Triki 2 с…');
+  setTimeout(() => finishCalib(auto), ms);
+}
+function finishCalib(auto){
+  const c = st.calib; st.calib = null;
+  if (!c || c.length < 10) { log('Калібрування: замало даних', 'w'); return; }
+  const mean = i => c.reduce((s,r)=>s+r[i],0)/c.length;
+  const sd = i => { const m=mean(i); return Math.sqrt(c.reduce((s,r)=>s+(r[i]-m)**2,0)/c.length); };
+  const gyroSdDps = Math.max(sd(3),sd(4),sd(5)) / S.gyroScale;
+  const mags = c.map(r => Math.hypot(r[0],r[1],r[2]));
+  const magMean = mags.reduce((s,v)=>s+v,0)/mags.length;
+  const magSd = Math.sqrt(mags.reduce((s,v)=>s+(v-magMean)**2,0)/mags.length);
+  if (gyroSdDps > 3 || magSd > 0.05*magMean) {
+    log(`Калібрування: Triki рухався (шум гіроскопа ${gyroSdDps.toFixed(1)} °/с). Поклади його нерухомо і натисни «Калібрувати».`, 'w');
+    return;
+  }
+  st.bias = [mean(3), mean(4), mean(5)];
+  const opts = [[2048,'±16g'],[4096,'±8g'],[8192,'±4g'],[16384,'±2g']];
+  const best = opts.reduce((b,o) => Math.abs(o[0]-magMean) < Math.abs(b[0]-magMean) ? o : b);
+  const close = Math.abs(best[0]-magMean)/best[0] < 0.15;
+  st.calibInfo = { lsb: Math.round(magMean), range: close ? best[1] : '?', biasDps: st.bias.map(v => v / S.gyroScale) };
+  log(`Калібрування OK: 1g = ${Math.round(magMean)} LSB → ${close ? best[1] : 'невідомий діапазон'}; дрейф гіроскопа ` +
+      st.calibInfo.biasDps.map(v=>v.toFixed(1)).join(' / ') + ' °/с', 'o');
+  if (close && best[0] !== S.accScale) {
+    S.accScale = best[0]; $('accScale').value = best[0];
+    log(`Масштаб акселерометра змінено на ${best[0]} LSB/g`, 'w');
+  }
+  st.q = [1,0,0,0];
+}
+
+// ================= орієнтація (фільтр Mahony) =================
+function mahony(g, a, dt){
+  let [gx,gy,gz] = g;
+  const an = Math.hypot(a[0],a[1],a[2]);
+  let [w,x,y,z] = st.q;
+  if (an > 0.75 && an < 1.25) {
+    const ax=a[0]/an, ay=a[1]/an, az=a[2]/an;
+    const vx = 2*(x*z - w*y), vy = 2*(w*x + y*z), vz = w*w - x*x - y*y + z*z;
+    gx += KP*(ay*vz - az*vy); gy += KP*(az*vx - ax*vz); gz += KP*(ax*vy - ay*vx);
+  }
+  const h = 0.5*dt;
+  const q = [w + (-x*gx - y*gy - z*gz)*h, x + (w*gx + y*gz - z*gy)*h, y + (w*gy - x*gz + z*gx)*h, z + (w*gz + x*gy - y*gx)*h];
+  const nq = Math.hypot(...q); st.q = q.map(v => v/nq);
+}
+function quatToR([w,x,y,z]){
+  return [[1-2*(y*y+z*z), 2*(x*y-w*z), 2*(x*z+w*y)],
+          [2*(x*y+w*z), 1-2*(x*x+z*z), 2*(y*z-w*x)],
+          [2*(x*z-w*y), 2*(y*z+w*x), 1-2*(x*x+y*y)]];
+}
+function euler([w,x,y,z]){
+  const r = Math.atan2(2*(w*x+y*z), 1-2*(x*x+y*y));
+  const p = Math.asin(Math.max(-1, Math.min(1, 2*(w*y-z*x))));
+  const yv = Math.atan2(2*(w*z+x*y), 1-2*(y*y+z*z));
+  return [r,p,yv].map(v => v*180/Math.PI);
+}
+
+// ================= розпізнавання трюків =================
+function repairRuns(col){
+  const out = col.slice(), n = col.length;
+  for (let i=0;i<n;){
+    if (Math.abs(col[i]) < SAT) { i++; continue; }
+    const s = i; while (i<n && Math.abs(col[i]) >= SAT) i++; const e = i-1;
+    const pts = [];
+    for (let k=s-3;k<s;k++) if (k>=0 && Math.abs(col[k])<SAT) pts.push(k);
+    for (let k=e+1;k<=e+3;k++) if (k<n && Math.abs(col[k])<SAT) pts.push(k);
+    if (pts.length < 3) continue;
+    // парабола методом найменших квадратів
+    let S0=0,S1=0,S2=0,S3=0,S4=0,T0=0,T1=0,T2=0;
+    for (const k of pts){ const x=k, y=col[k]; S0++; S1+=x; S2+=x*x; S3+=x*x*x; S4+=x*x*x*x; T0+=y; T1+=x*y; T2+=x*x*y; }
+    const M = [[S4,S3,S2,T2],[S3,S2,S1,T1],[S2,S1,S0,T0]];
+    for (let c=0;c<3;c++){ let p=c; for(let r=c+1;r<3;r++) if(Math.abs(M[r][c])>Math.abs(M[p][c])) p=r; [M[c],M[p]]=[M[p],M[c]];
+      for (let r=0;r<3;r++) if (r!==c){ const f=M[r][c]/M[c][c]; for(let k=c;k<4;k++) M[r][k]-=f*M[c][k]; } }
+    const A=M[0][3]/M[0][0], B=M[1][3]/M[1][1], C=M[2][3]/M[2][2];
+    const sign = Math.sign(col[s]);
+    for (let k=s;k<=e;k++){ const f = Math.abs(A*k*k + B*k + C); out[k] = sign*Math.min(Math.max(f, SAT), 2.5*SAT); }
+  }
+  return out;
+}
+
+function detect(){
+  const B = st.buf; if (B.length < 20) return;
+  const fs = st.fs, N = B.length;
+  const amag = B.map(s => s.amag);
+  // гіроскоп з домальованими піками
+  const cols = [0,1,2].map(i => repairRuns(B.map(s => s.raw[3+i])));
+  const gyro = B.map((_,j) => mapAxes([0,1,2].map(i => cols[i][j] - st.bias[i])).map(v => v / S.gyroScale));
+  // піки удару
+  const dist = Math.max(1, Math.round(0.12*fs));
+  let peaks = [];
+  for (let i=1;i<N-1;i++) if (amag[i] >= IMPACT_G && amag[i] >= amag[i-1] && amag[i] > amag[i+1]) {
+    if (peaks.length && i - peaks[peaks.length-1] < dist) { if (amag[i] > amag[peaks[peaks.length-1]]) peaks[peaks.length-1] = i; }
+    else peaks.push(i);
+  }
+  const r = x => Math.max(1, Math.round(x*fs));
+  for (let pi=0; pi<peaks.length; pi++){
+    const p = peaks[pi]; if (B[p].n <= st.lastLandN) continue;
+    for (let qi=pi+1; qi<peaks.length; qi++){
+      const q = peaks[qi], air = (q-p)/fs;
+      if (air < MIN_AIR) continue; if (air > MAX_AIR) break;
+      if (q + r(0.3) >= N) return;           // ще чекаємо, що буде після приземлення
+      const a0 = p + r(0.04), b0 = q - r(0.04); if (b0 <= a0) continue;
+      let ff = 0; for (let k=a0;k<b0;k++) if (amag[k] < FREEFALL_G) ff++; ff /= (b0-a0);
+      const ang = [0,0,0]; for (let k=p;k<q;k++) for (let i=0;i<3;i++) ang[i] += gyro[k][i]/fs;
+      const rot = Math.max(...ang.map(Math.abs));
+      const after = amag.slice(q + r(0.03), q + r(0.15)).sort((x,y)=>x-y);
+      const med = after.length ? after[Math.floor(after.length/2)] : 0;
+      let spin = 0; for (let k=q+r(0.04); k<Math.min(N, q+r(0.2)); k++) spin = Math.max(spin, Math.hypot(...gyro[k]));
+      const grounded = med > 0.6 && med < 1.6 && spin < LANDED_MAX_DPS;
+      if ((ff > 0.35 || rot > MIN_ROT) && grounded) {
+        let clipped = 0; for (let k=p;k<=q;k++) if (B[k].raw.slice(3).some(v=>Math.abs(v)>=SAT)) clipped++;
+        let peakFlip = 0; for (let k=p;k<q;k++) peakFlip = Math.max(peakFlip, Math.abs(gyro[k][0]));
+        addTrick({ nPop:B[p].n, nLand:B[q].n, air, roll:ang[0], pitch:ang[1], yaw:ang[2],
+                   popG:amag[p], landG:amag[q], clipped, peakFlip });
+        st.lastLandN = B[q].n;
+        break;
+      }
+    }
+  }
+}
+
+function classify(roll, yaw, pitch){
+  if (S.stance === 'goofy') { roll = -roll; yaw = -yaw; }
+  const nf = Math.round(roll/360), ns = Math.round(yaw/180);
+  const resF = roll - nf*360, resS = yaw - ns*180, flags = [];
+  if (Math.abs(resF) > 50) {
+    if (nf === 0) flags.push(`частковий оберт ${Math.abs(roll).toFixed(0)}°`);
+    else if (Math.abs(roll) < Math.abs(nf*360)) flags.push(`недокручений flip (${Math.abs(resF).toFixed(0)}° не вистачило)`);
+    else flags.push(`перекручений flip (+${Math.abs(resF).toFixed(0)}°)`);
+  }
+  if (Math.abs(resS) > 40) flags.push('неточний shuvit');
+  if (Math.abs(pitch) > 270) return {name:'Impossible', flags, conf:0.6};
+  const af = Math.abs(nf), as = Math.abs(ns), kick = nf > 0, bs = ns > 0;
+  let name;
+  if (af===0 && as===0) name = 'Ollie';
+  else if (as===0 && af<=3) name = ['', '', 'Double ', 'Triple '][af] + (kick ? 'kickflip' : 'heelflip');
+  else if (af===0 && as===1) name = (bs?'BS':'FS') + ' pop shuvit';
+  else if (af===0 && as===2) name = (bs?'BS':'FS') + ' 360 shuvit';
+  else if (af===1 && as===1) name = kick ? (bs ? 'Varial kickflip' : 'Hardflip') : (bs ? 'Inward heelflip' : 'Varial heelflip');
+  else if (af===1 && as===2) name = kick ? (bs ? '360 flip' : 'FS 360 kickflip') : (bs ? 'BS 360 heelflip' : 'Laser flip');
+  else name = `Невідомий (flip×${nf}, shuv×${ns})`;
+  name = name.charAt(0).toUpperCase() + name.slice(1);
+  const conf = 1 - Math.min(1, (Math.abs(resF)/180 + Math.abs(resS)/90)/2);
+  return {name, flags, conf};
+}
+
+function addTrick(t){
+  const c = classify(t.roll, t.yaw, t.pitch);
+  if (t.clipped) c.flags.push(`обрізано ${t.clipped} семпл. (домальовано)`);
+  Object.assign(t, c, { height: 9.81*t.air*t.air/8*100, num: st.tricks.length+1, time: new Date() });
+  st.tricks.push(t);
+  $('last').innerHTML =
+    `<div class="name">${t.num}. ${t.name}</div>
+     <div class="meta">впевненість ${(t.conf*100).toFixed(0)}% · політ ${(t.air*1000).toFixed(0)} мс · висота ${t.height.toFixed(1)} см ·
+     крен ${t.roll.toFixed(0)}° · рискання ${t.yaw.toFixed(0)}° · приземлення ${t.landG.toFixed(1)} g</div>
+     ${t.flags.length ? `<div class="flags">⚠ ${t.flags.join('; ')}</div>` : ''}`;
+  const d = document.createElement('div');
+  d.innerHTML = `<span class="t">${t.time.toLocaleTimeString().slice(0,8)}</span> <b>${t.name}</b> · ${(t.air*1000).toFixed(0)} мс · ${t.height.toFixed(0)} см` +
+                (t.flags.length ? ` <span class="flags">⚠</span>` : '');
+  $('feed').prepend(d);
+  const counts = {}; for (const x of st.tricks) counts[x.name] = (counts[x.name]||0) + 1;
+  const hs = st.tricks.map(x => x.height);
+  $('summary').textContent = `Всього: ${st.tricks.length} · середня висота ${(hs.reduce((a,b)=>a+b,0)/hs.length).toFixed(1)} см · найвища ${Math.max(...hs).toFixed(1)} см · ` +
+    Object.entries(counts).map(([k,v]) => `${k} ×${v}`).join(', ');
+  log(`Трюк: ${t.name} (${(t.air*1000).toFixed(0)} мс, крен ${t.roll.toFixed(0)}°, рискання ${t.yaw.toFixed(0)}°)`, 'o');
+  if ($('beep').checked) beep(t.name);
+}
+
+function beep(name){
+  try {
+    st.audio = st.audio || new (window.AudioContext || window.webkitAudioContext)();
+    const ac = st.audio, o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'triangle';
+    o.frequency.value = name.includes('flip') ? 660 : name.includes('shuvit') ? 520 : 440;
+    g.gain.setValueAtTime(0.0001, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.2, ac.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.25);
+    o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + 0.3);
+  } catch {}
+}
+
+// ================= запис CSV =================
+function toggleRec(){
+  if (st.rec) { stopRec(); return; }
+  st.rec = { t0: performance.now(), rows: [] };
+  $('bRec').classList.add('on'); $('bRec').textContent = '■ Зупинити запис';
+  log('Запис почато');
+}
+function stopRec(){
+  const r = st.rec; st.rec = null;
+  $('bRec').classList.remove('on'); $('bRec').textContent = '● Запис';
+  if (!r || !r.rows.length) { log('Запис порожній', 'w'); return; }
+  const csv = 't_sec,ax,ay,az,gx,gy,gz\n' + r.rows.map(x => x.join(',')).join('\n');
+  const d = new Date(), p = v => String(v).padStart(2,'0');
+  const name = `triki_${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.csv`;
+  saveText(name, csv, 'text/csv');
+  log(`Запис: ${r.rows.length} семплів → ${name} (для triki_analyze.py)`, 'o');
+}
+
+// Зберегти файл: на iPhone — через «Поділитися» (Файли, Telegram, AirDrop…), інакше завантаження,
+// а якщо нічого не вийшло — показати текст, щоб скопіювати.
+async function saveText(name, text, mime){
+  try {
+    const file = new File([text], name, {type: mime});
+    if (navigator.canShare && navigator.canShare({files:[file]})) { await navigator.share({files:[file], title:name}); return; }
+  } catch (e) { if (e.name === 'AbortError') return; }
+  try {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], {type: mime})); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  } catch {}
+  const box = $('exportBox');
+  box.style.display = 'block';
+  $('exportName').textContent = name + ' — якщо файл не зберігся, натисни «Копіювати» і встав у нотатки/месенджер';
+  $('exportText').value = text;
+}
+
+// ================= графіки =================
+function fitCanvas(cv){
+  const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  if (cv.width !== Math.round(w*dpr) || cv.height !== Math.round(h*dpr)) { cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr); }
+  const c = cv.getContext('2d'); c.setTransform(dpr,0,0,dpr,0,0); c.clearRect(0,0,w,h);
+  return [c,w,h];
+}
+function drawChart(cv, series, o){
+  const [c,w,h] = fitCanvas(cv);
+  const N = Math.max(10, Math.round(5*st.fs)), data = st.buf.slice(-N), n = data.length;
+  const L=46, Rr=8, T=8, Bt=8;
+  let lo, hi;
+  if (o.positive) { let m = o.min; for (const s of series) for (const d of data) m = Math.max(m, s.get(d)); hi = m*1.1; lo = 0; }
+  else { let m = o.min; for (const s of series) for (const d of data) m = Math.max(m, Math.abs(s.get(d))); hi = m*1.1; lo = -hi; }
+  const X = i => L + (i + (N-n)) / (N-1) * (w-L-Rr), Y = v => T + (hi-v)/(hi-lo)*(h-T-Bt);
+  // інтервали трюків
+  if (n) for (const t of st.tricks) {
+    const i0 = t.nPop - data[0].n, i1 = t.nLand - data[0].n;
+    if (i1 < 0 || i0 > n) continue;
+    c.fillStyle = 'rgba(111,220,140,.13)'; c.fillRect(X(Math.max(0,i0)), T, X(Math.min(n-1,i1)) - X(Math.max(0,i0)), h-T-Bt);
+  }
+  c.strokeStyle = '#2b303b'; c.lineWidth = 1; c.fillStyle = '#7d859a'; c.font = '11px system-ui';
+  const ticks = o.positive ? [0, hi/2, hi] : [lo, 0, hi];
+  for (const v of ticks) { c.beginPath(); c.moveTo(L, Y(v)); c.lineTo(w-Rr, Y(v)); c.stroke(); c.fillText(v.toFixed(Math.abs(hi) < 10 ? 1 : 0), 4, Y(v)+4); }
+  for (const ln of (o.lines || [])) if (ln.y > lo && ln.y < hi) {
+    c.save(); c.setLineDash([4,4]); c.strokeStyle = ln.color; c.beginPath(); c.moveTo(L, Y(ln.y)); c.lineTo(w-Rr, Y(ln.y)); c.stroke(); c.restore();
+  }
+  for (const s of series) {
+    c.strokeStyle = s.color; c.lineWidth = 1.4; c.beginPath();
+    data.forEach((d,i) => { const x = X(i), y = Y(s.get(d)); i ? c.lineTo(x,y) : c.moveTo(x,y); }); c.stroke();
+  }
+  let lx = L + 6; c.font = '12px system-ui';
+  c.fillStyle = '#c9cfdb'; c.fillText(o.title, lx, T + 12); lx += c.measureText(o.title).width + 12;
+  for (const s of series) { c.fillStyle = s.color; c.fillText(s.label, lx, T + 12); lx += c.measureText(s.label).width + 10; }
+  if (!n) { c.fillStyle = '#7d859a'; c.font = '13px system-ui'; c.fillText('немає даних', w/2 - 35, h/2); }
+}
+
+// ================= 3D =================
+const V = {
+  add:(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]], sub:(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],
+  dot:(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2], mul:(a,s)=>[a[0]*s,a[1]*s,a[2]*s],
+  cross:(a,b)=>[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]],
+  norm:a=>{const l=Math.hypot(...a);return [a[0]/l,a[1]/l,a[2]/l];},
+  rot:(R,p)=>[R[0][0]*p[0]+R[0][1]*p[1]+R[0][2]*p[2], R[1][0]*p[0]+R[1][1]*p[1]+R[1][2]*p[2], R[2][0]*p[0]+R[2][1]*p[1]+R[2][2]*p[2]],
+};
+const box = (c,s,col) => ({c, s:s.map(v=>v/2), col: typeof col === 'string' ? {top:col,bottom:col,side:col} : col});
+const MODEL = [
+  box([0,0,0],[.80,.22,.03],{top:'#2c313b',bottom:'#ff8a3d',side:'#caa27a'}),
+  box([.33,0,.0165],[.09,.20,.004],'#6fdc8c'),
+  box([.26,0,-.034],[.05,.17,.03],'#9aa3b2'), box([-.26,0,-.034],[.05,.17,.03],'#9aa3b2'),
+  box([.26,.105,-.064],[.055,.04,.055],'#ece6d8'), box([.26,-.105,-.064],[.055,.04,.055],'#ece6d8'),
+  box([-.26,.105,-.064],[.055,.04,.055],'#ece6d8'), box([-.26,-.105,-.064],[.055,.04,.055],'#ece6d8'),
+  box([0,0,-.022],[.05,.05,.012],'#e14b4b'),   // сам Triki під дошкою
+];
+const FACES = [
+  {n:[0,0,1],k:'top',v:[[-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]]}, {n:[0,0,-1],k:'bottom',v:[[-1,-1,-1],[-1,1,-1],[1,1,-1],[1,-1,-1]]},
+  {n:[1,0,0],k:'side',v:[[1,-1,-1],[1,1,-1],[1,1,1],[1,-1,1]]}, {n:[-1,0,0],k:'side',v:[[-1,-1,-1],[-1,-1,1],[-1,1,1],[-1,1,-1]]},
+  {n:[0,1,0],k:'side',v:[[-1,1,-1],[-1,1,1],[1,1,1],[1,1,-1]]}, {n:[0,-1,0],k:'side',v:[[-1,-1,-1],[1,-1,-1],[1,-1,1],[-1,-1,1]]},
+];
+const LIGHT = V.norm([0.4,-0.7,1]);
+function shade(hex, k){ const n = parseInt(hex.slice(1),16); return `rgb(${[16,8,0].map(s => Math.round(((n>>s)&255)*k)).join(',')})`; }
+function draw3D(){
+  const [c,w,h] = fitCanvas($('cv3d'));
+  const R = quatToR(st.q), cam = [1.15,-1.55,0.8];
+  const f = V.norm(V.mul(cam,-1)), r = V.norm(V.cross(f,[0,0,1])), u = V.cross(r,f), F = Math.min(w*1.45, h*1.9);
+  const P = p => { const d = V.sub(p,cam), z = V.dot(d,f); return [w/2 + F*V.dot(d,r)/z, h*0.55 - F*V.dot(d,u)/z]; };
+  const gz = -0.2;
+  c.strokeStyle = '#232833'; c.lineWidth = 1;
+  for (let i=-5;i<=5;i++){ for (const [a,b] of [[[i*.15,-.75,gz],[i*.15,.75,gz]],[[-.75,i*.15,gz],[.75,i*.15,gz]]]) {
+    const A=P(a), Bp=P(b); c.beginPath(); c.moveTo(...A); c.lineTo(...Bp); c.stroke(); } }
+  // тінь
+  c.fillStyle = 'rgba(0,0,0,.35)'; c.beginPath();
+  [[-.4,-.11],[.4,-.11],[.4,.11],[-.4,.11]].forEach((p,i) => { const wp = V.rot(R,[p[0],p[1],0]); const s = P([wp[0],wp[1],gz]); i ? c.lineTo(...s) : c.moveTo(...s); });
+  c.closePath(); c.fill();
+  const faces = [];
+  for (const b of MODEL) for (const fc of FACES) {
+    const nW = V.rot(R, fc.n), cW = V.rot(R, V.add(b.c, fc.n.map((v,i)=>v*b.s[i])));
+    const view = V.sub(cW, cam); if (V.dot(nW, view) >= 0) continue;
+    const pts = fc.v.map(sg => P(V.rot(R, V.add(b.c, sg.map((v,i)=>v*b.s[i])))));
+    faces.push({pts, depth: Math.hypot(...view), color: shade(b.col[fc.k], 0.42 + 0.58*Math.max(0, V.dot(nW, LIGHT)))});
+  }
+  faces.sort((a,b) => b.depth - a.depth);
+  for (const fc of faces) { c.fillStyle = fc.color; c.strokeStyle = 'rgba(0,0,0,.25)'; c.beginPath(); fc.pts.forEach((p,i)=> i ? c.lineTo(...p) : c.moveTo(...p)); c.closePath(); c.fill(); c.stroke(); }
+}
+
+// ================= діагностика =================
+function renderDiag(){
+  const now = performance.now(), last = st.buf.slice(-Math.round(st.fs*0.5));
+  let still = null;
+  if (last.length > 5) {
+    const m = last.reduce((s,d)=>s+d.amag,0)/last.length;
+    const gs = Math.max(...last.map(d => Math.hypot(...d.g)));
+    if (gs < 10) still = m;
+  }
+  const hz = st.arrivals.length/2;
+  const flowing = st.source && hz > 5;
+  const items = [
+    [!!st.source, st.source === 'demo' ? 'Джерело даних: демо' : 'Triki підключений'],
+    [flowing, `Дані йдуть${flowing ? ` (${hz.toFixed(0)} Гц)` : ''}`],
+    [!!st.calibInfo, st.calibInfo ? `Калібрування: 1g = ${st.calibInfo.lsb} LSB (${st.calibInfo.range})` : 'Калібрування (полеж 2 с нерухомо)'],
+    [still !== null && Math.abs(still-1) < 0.1, still !== null ? `У спокої |a| = ${still.toFixed(2)} g (має бути ≈ 1.00)` : '|a| у спокої ≈ 1 g (поклади Triki)'],
+    [null, 'Покрути Triki в руці — дошка на екрані має повторювати рух'],
+    [st.tricks.length > 0 ? true : null, 'Підкинь на ліжко — має з\'явитись Ollie'],
+  ];
+  $('check').innerHTML = items.map(([ok,t]) =>
+    `<div><span class="i" style="color:${ok===true?'var(--ok)':ok===false?'var(--muted)':'var(--warn)'}">${ok===true?'✓':ok===false?'○':'•'}</span>${t}</div>`).join('');
+  const lastS = st.buf[st.buf.length-1];
+  const rows = [
+    ['Батарея', st.battery != null ? st.battery + '%' : '—'],
+    ['Частота', st.source ? `${hz.toFixed(1)} Гц` : '—'],
+    ['Семплів', st.n],
+    ['Обрізаних (упор у стелю)', st.sat],
+    ['Інших пакетів', st.unknown],
+    ['Останній пакет', `<code style="font-size:11px">${st.lastHex}</code>`],
+    ['Сирі ax ay az', lastS ? lastS.raw.slice(0,3).join(' ') : '—'],
+    ['Сирі gx gy gz', lastS ? lastS.raw.slice(3).join(' ') : '—'],
+    ['Дрейф гіроскопа', st.calibInfo ? st.calibInfo.biasDps.map(v=>v.toFixed(1)).join(' / ') + ' °/с' : '—'],
+    ['Запис', st.rec ? `${st.rec.rows.length} семплів` : 'вимкнено'],
+    ['Пакети', Object.entries(st.pktSizes).map(([k,v]) => `${k}Б×${v}`).join(', ') || '—'],
+    ['Спокій', st.source ? `${((performance.now() - st.lastMotion)/1000).toFixed(0)} с` : '—'],
+    ['Відключень', st.sleepLog.filter(l => l.includes("з'єднання")).length],
+  ];
+  $('diag').innerHTML = rows.map(([k,v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+}
+
+// ================= цикл відмальовки =================
+let lastDiag = 0;
+function frame(t){
+  draw3D();
+  const e = euler(st.q);
+  $('aRoll').textContent = e[0].toFixed(0) + '°'; $('aPitch').textContent = e[1].toFixed(0) + '°'; $('aYaw').textContent = e[2].toFixed(0) + '°';
+  drawChart($('cvMag'), [{get:d=>d.amag, color:'#e7e9ef', label:'|a|'}],
+            {title:'|a|, g', min:2.5, positive:true, lines:[{y:1,color:'#59627a'},{y:IMPACT_G,color:'#c24a4a'}]});
+  drawChart($('cvAcc'), [{get:d=>d.a[0],color:'#4ea1ff',label:'x'},{get:d=>d.a[1],color:'#9aa3b5',label:'y'},{get:d=>d.a[2],color:'#ff6b8b',label:'z'}],
+            {title:'прискорення, g', min:1.5});
+  const lim = 32767 / S.gyroScale;
+  drawChart($('cvGyro'), [{get:d=>d.g[0],color:'#4ea1ff',label:'крен'},{get:d=>d.g[1],color:'#9aa3b5',label:'тангаж'},{get:d=>d.g[2],color:'#ff6b8b',label:'рискання'}],
+            {title:'обертання, °/с', min:150, lines:[{y:lim,color:'#c24a4a'},{y:-lim,color:'#c24a4a'}]});
+  if (t - lastDiag > 250) { renderDiag(); lastDiag = t; }
+  requestAnimationFrame(frame);
+}
+
+// ================= кнопки =================
+$('bConnect').onclick = () => connect(false);
+$('bConnectAll').onclick = () => connect(true);
+$('bDemo').onclick = startDemo;
+$('bDisconnect').onclick = () => { if (st.source === 'demo') { stopAll(); setStatus('не підключено'); log('Демо зупинено'); } else disconnect(); };
+$('bRec').onclick = toggleRec;
+$('bResetQ').onclick = () => { st.q = [1,0,0,0]; };
+$('bCalib').onclick = () => startCalib(false);
+$('bLed').onclick = async () => {
+  if (!st.led) return;
+  st.ledOn = !st.ledOn;
+  try { await st.led.writeValue(new Uint8Array([st.ledOn ? 1 : 0])); log('LED ' + (st.ledOn ? 'увімкнено' : 'вимкнено')); }
+  catch (e) { log('LED: ' + e.message, 'e'); }
+};
+$('bSweep').onclick = sweep;
+$('bCopy').onclick = async () => {
+  const t = $('exportText');
+  try { await navigator.clipboard.writeText(t.value); log('Скопійовано', 'o'); }
+  catch { t.select(); document.execCommand && document.execCommand('copy'); log('Виділено — скопіюй вручну, якщо не скопіювалось'); }
+};
+$('bWake').onclick = restartStream;
+$('bShareLog').onclick = () => {
+  const text = 'Triki — журнал\n\nВідключення і тести:\n' + (st.sleepLog.join('\n') || '(нема)') +
+    '\n\nПакети: ' + JSON.stringify(st.pktSizes) + '\n\nЖурнал:\n' +
+    Array.from($('log').childNodes).map(d => d.textContent).reverse().join('\n');
+  saveText('triki_log.txt', text, 'text/plain');
+};
+
+if (!navigator.bluetooth) banner('Цей браузер не вміє Bluetooth. На iPhone відкрий цю сторінку в браузері <b>Bluefy</b> (App Store), на ПК — у <b>Chrome</b> або <b>Edge</b>. «Демо без Triki» працює й тут.');
+log('Готово. Triki не повинен бути підключений до ПК чи Żappka. Натисни «Підключити Triki».');
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
