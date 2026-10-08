@@ -282,12 +282,21 @@ async function connect(all){
     st.device = dev;
     log(`Обрано: ${dev.name || '(без назви)'}`);
     dev.addEventListener('gattserverdisconnected', onDisconnected);
-    st.wantBle = true;
     st.source = 'ble'; resetSession();
-    await setupGatt();
+    try { await setupGatt(); }
+    catch (e) {
+      try { dev.gatt.disconnect(); } catch {}
+      st.source = null; updateButtons();
+      if (e.isNotTriki) {
+        log(`«${dev.name || 'без назви'}» — це НЕ Triki. Натисни «Усі пристрої» і вибери інший.`, 'w');
+        setStatus('це не Triki — спробуй інший', 'warn');
+      } else { log('Не вдалося підключитись: ' + e.message, 'e'); setStatus('не підключено', 'bad'); }
+      return;
+    }
+    st.wantBle = true;
     afterStart();
   } catch (e) {
-    if (e.name === 'NotFoundError') log('Вибір скасовано або Triki не знайдено. Він не повинен бути підключений до ПК чи Żappka.', 'w');
+    if (e.name === 'NotFoundError') log('Вибір скасовано або Triki не знайдено. Поворуши Triki; він не повинен бути підключений до ПК, nRF Connect чи Żappka.', 'w');
     else log('Помилка: ' + e.message, 'e');
     setStatus('не підключено', 'bad');
     st.wantBle = false;
@@ -298,7 +307,9 @@ async function setupGatt(){
   const dev = st.device;
   setStatus('підключення…', 'warn');
   const server = await dev.gatt.connect();
-  const svc = await server.getPrimaryService(NUS);
+  let svc;
+  try { svc = await server.getPrimaryService(NUS); }
+  catch (e) { const err = new Error('немає сервісу Triki'); err.isNotTriki = true; throw err; }
   const tx = await svc.getCharacteristic(TX);
   tx.removeEventListener('characteristicvaluechanged', onNotify);
   tx.addEventListener('characteristicvaluechanged', onNotify);
