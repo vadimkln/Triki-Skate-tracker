@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#D2D4D2">
-<meta name="description" content="Трюки на скейті з датчиком Triki: розпізнавання, повтор і статистика сесії">
+<meta name="description" content="Skateboard tricks with the Triki sensor: detection, replay and session stats">
 <title>Triki Skate</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,112 +12,221 @@
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
+<!--BODY-->
 <div class="banner" id="banner" hidden></div>
 
-<div class="hero">
-  <canvas id="scene" aria-label="3D-модель дошки, повторює рух Triki"></canvas>
+<header class="appbar">
+  <span class="brand">Triki Skate</span>
+  <div class="modes" id="modes" role="group" data-i18n-aria="mode.aria">
+    <button data-mode="tracker" data-i18n="mode.tracker">Трекер</button><button data-mode="game" data-i18n="mode.game">Гра</button>
+  </div>
+</header>
+
+<div class="hero" id="hero">
+  <canvas id="scene" data-i18n-aria="scene.aria"></canvas>
   <div class="top">
-    <div class="conn"><span class="dot" id="dot"></span><span id="connText">Не підключено</span></div>
+    <div class="conn"><span class="dot" id="dot"></span><span id="connText"></span>
+      <button class="demo-exit" id="bDemoExit" hidden><span><b data-i18n="b.demoExit">Вийти з демо</b><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></span></button></div>
     <div class="speed" id="speed" hidden></div>
-    <button class="icon" id="bSettings" aria-label="Налаштування">
+    <button class="icon" id="bSettings" data-i18n-aria="settings.aria">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
   </div>
-  <div class="air" id="air">У повітрі</div>
+  <div class="calbar" id="calBar" hidden><span id="calBarText"></span><button class="calbar-stop" id="calBarStop" data-i18n="cal.stop">Стоп</button></div>
+  <div class="air" id="air" data-i18n="air">У повітрі</div>
   <div class="callout" id="callout" aria-live="polite"></div>
+
+  <!-- Гра: рахунок, завдання S.K.A.T.E., підказка й рівень -->
+  <div class="hud" id="hud" hidden>
+    <div class="hud-top">
+      <div class="hud-score"><b id="hudScore">0</b><span class="hud-combo" id="hudCombo" hidden></span></div>
+      <div class="hud-skate" id="hudSkate" hidden>
+        <div class="hud-target"><small data-i18n="hud.do">Зроби</small><b id="hudTarget"></b></div>
+        <div class="letters" id="hudLetters"><span>S</span><span>K</span><span>A</span><span>T</span><span>E</span></div>
+      </div>
+      <div class="hud-status" id="hudStatus" aria-live="polite"></div>
+    </div>
+    <div class="level" id="hudLevel" aria-hidden="true"><i class="ring" id="hudRing"></i><i class="cross"></i><i class="bub" id="hudBubble"></i></div>
+  </div>
   <div class="cta" id="cta">
-    <button class="btn curb" id="bConnect">Підключити Triki</button>
+    <button class="btn curb" id="bConnect"></button>
+    <p class="cta-hint" id="ctaHint"></p>
     <button class="link" id="bDemoHero">Спробувати без Triki</button>
+  </div>
+
+  <!-- Повтор трюку з таймлайном -->
+  <div class="rp" id="rp" hidden role="region" data-i18n-aria="rp.title">
+    <div class="rp-head">
+      <div class="rp-title"><span class="rp-tag" data-i18n="rp.title">Повтор</span><span class="rp-name" id="rpName"></span></div>
+      <button class="rp-x" id="rpClose" data-i18n-aria="rp.close"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
+    <div class="rp-read">
+      <span class="rp-tc" id="rpTc">0:00.00</span>
+      <span class="rp-meta"><span id="rpFrame"></span><span id="rpRel"></span></span>
+    </div>
+    <div class="rp-vals">
+      <span><i data-i18n="rp.height">висота</i> <b id="rpH">0</b></span>
+      <span><i data-i18n="rp.flip">фліп</i> <b id="rpRoll">0°</b></span>
+      <span><i data-i18n="rp.spin">розворот</i> <b id="rpYaw">0°</b></span>
+    </div>
+    <canvas class="rp-track" id="rpTrack" role="slider" tabindex="0" data-i18n-aria="rp.timeline"></canvas>
+    <div class="rp-ctl">
+      <div class="rp-btns">
+        <button class="rp-b" id="rpStart" data-i18n-aria="rp.start"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+        <button class="rp-b" id="rpBack" data-i18n-aria="rp.back"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6v12l-8-6zM16 6h2v12h-2z"/></svg></button>
+        <button class="rp-b rp-play" id="rpPlay" data-i18n-aria="rp.play"><svg viewBox="0 0 24 24" aria-hidden="true"><path id="rpPlayIcon" d="M8 5v14l11-7z"/></svg></button>
+        <button class="rp-b" id="rpFwd" data-i18n-aria="rp.fwd"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h2v12H6zM9 6v12l8-6z"/></svg></button>
+        <button class="rp-b" id="rpEnd" data-i18n-aria="rp.end"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14l11-7zM16 5h2v14h-2z"/></svg></button>
+      </div>
+      <div class="rp-speed" id="rpSpeed" role="group" data-i18n-aria="rp.speed">
+        <button data-sp="0.25">¼×</button><button data-sp="0.5">½×</button><button data-sp="1">1×</button>
+      </div>
+    </div>
+    <p class="rp-hint" id="rpHint" data-i18n="rp.drag">Тягни по екрану, щоб обертати камеру</p>
   </div>
 </div>
 
 <main>
+ <div id="trackerMain">
+  <p class="demo-note" id="demoNote" data-i18n="demo.note" hidden></p>
   <section>
-    <h2>Останній трюк</h2>
+    <h2 data-i18n="h.last">Останній трюк</h2>
     <div id="last"></div>
   </section>
 
   <section>
-    <h2>Трюки цієї сесії</h2>
+    <h2 data-i18n="h.list">Трюки цієї сесії</h2>
     <ul class="list" id="list"></ul>
-    <p class="empty" id="listEmpty">Поки порожньо. Кожен трюк з'явиться тут, і його можна виправити, якщо програма помилилась.</p>
+    <p class="empty" id="listEmpty" data-i18n="list.empty"></p>
   </section>
 
   <section>
-    <h2>Статистика сесії</h2>
+    <h2 data-i18n="h.stats">Статистика сесії</h2>
     <dl class="stats" id="stats"></dl>
     <div class="bytrick" id="bytrick"></div>
-    <div class="session-actions"><button class="btn small" id="bNewSession">Почати нову сесію</button></div>
+    <div class="session-actions"><button class="btn small" id="bNewSession" data-i18n="stats.new">Почати нову сесію</button></div>
     <details class="history" id="historyBox" hidden>
-      <summary id="historySum">Попередні сесії</summary>
+      <summary id="historySum"></summary>
       <ol id="history"></ol>
     </details>
   </section>
+ </div>
+
+ <div id="gameMain" hidden>
+  <section>
+    <h2 data-i18n="game.h">Гра з Triki</h2>
+    <div class="modes modes-sm" id="gameModes" role="group" data-i18n-aria="game.h"><button data-gm="free" data-i18n="game.free"></button><button data-gm="skate" data-i18n="game.skate"></button></div>
+    <p class="note" id="gameModeNote"></p>
+    <div class="btns game-btns"><button class="btn small primary" id="bLevel" data-i18n="game.level"></button><button class="btn small" id="bGameRestart" data-i18n="game.restart"></button></div>
+  </section>
+  <section>
+    <details class="howto-box" id="howBox">
+      <summary><h2 data-i18n="game.how">Як грати</h2></summary>
+      <p class="how-intro" data-i18n="game.howIntro"></p>
+      <ol class="howto">
+        <li data-i18n-html="game.how1"></li><li data-i18n-html="game.how2"></li><li data-i18n-html="game.how3"></li>
+        <li data-i18n-html="game.how4"></li><li data-i18n-html="game.how5"></li><li data-i18n-html="game.how6"></li>
+      </ol>
+    </details>
+  </section>
+  <section>
+    <h2 data-i18n="game.score">Рахунок</h2>
+    <dl class="stats" id="gameStats"></dl>
+  </section>
+  <section>
+    <h2 data-i18n="game.list">Трюки в грі</h2>
+    <ul class="list" id="gameList"></ul>
+    <p class="empty" id="gameListEmpty" data-i18n="game.listEmpty"></p>
+  </section>
+ </div>
 </main>
 
 <div class="sheet-bg" id="sheetBg"></div>
-<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-label="Налаштування">
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" data-i18n-aria="sheet.title" hidden>
  <div class="sheet-inner">
-  <div class="sheet-head"><h2>Налаштування</h2><button class="btn small" id="bClose">Готово</button></div>
+  <div class="sheet-head"><h2 data-i18n="sheet.title">Налаштування</h2><button class="btn small" id="bClose" data-i18n="sheet.done">Готово</button></div>
 
   <div class="group">
-    <h3>Підключення</h3>
-    <p id="connInfo">Triki не підключений.</p>
+    <label class="opt"><b data-i18n="g.lang">Мова</b>
+      <select id="lang"><option value="uk">Українська</option><option value="en">English</option><option value="pl">Polski</option></select></label>
+  </div>
+
+  <div class="group">
+    <h3 data-i18n="g.conn">Підключення</h3>
+    <p id="connInfo"></p>
     <div class="btns">
-      <button class="btn small primary" id="bConnect2">Підключити Triki</button>
-      <button class="btn small" id="bConnectAll">Вибрати з усіх пристроїв</button>
-      <button class="btn small" id="bDisconnect" disabled>Відключити</button>
+      <button class="btn small primary" id="bConnect2" data-i18n="b.connect">Підключити</button>
+      <button class="btn small" id="bConnectAll" data-i18n="b.chooseOther">Вибрати інший пристрій</button>
+      <button class="btn small" id="bForget" data-i18n="b.forget" hidden>Забути цей Triki</button>
+      <button class="btn small" id="bDisconnect" data-i18n="b.disconnect" disabled>Відключити</button>
     </div>
-    <label class="opt">Частота сенсора
-      <select id="freq"><option value="104">104 Гц</option><option value="208">208 Гц</option><option value="416">416 Гц</option><option value="52">52 Гц</option></select></label>
-    <label class="opt">Будити Triki щосекунди (якщо сам відключається)<input type="checkbox" id="keepalive"></label>
-    <label class="opt">Перепідключатись автоматично<input type="checkbox" id="autoRe"></label>
+    <label class="opt"><span data-i18n="opt.autoConnect"></span><input type="checkbox" id="autoConnect"></label>
+    <label class="opt"><span data-i18n="opt.freq"></span>
+      <select id="freq"><option value="104">104</option><option value="208">208</option><option value="416">416</option><option value="52">52</option></select></label>
+    <label class="opt"><span data-i18n="opt.keepalive"></span><input type="checkbox" id="keepalive"></label>
+    <label class="opt"><span data-i18n="opt.autoRe"></span><input type="checkbox" id="autoRe"></label>
   </div>
 
   <div class="group">
-    <h3>Положення на дошці</h3>
-    <p id="mountInfo">Програма має знати, як Triki закріплений, інакше переплутає kickflip з shuvit. Займає 10 секунд.</p>
-    <div class="btns"><button class="btn small" id="bWizard">Налаштувати положення</button><button class="btn small" id="bMountReset">Скинути</button></div>
+    <h3 data-i18n="g.mount">Положення на дошці</h3>
+    <p id="mountInfo"></p>
+    <div class="btns"><button class="btn small" id="bWizard" data-i18n="b.wizard">Налаштувати положення</button><button class="btn small" id="bMountReset" data-i18n="b.reset">Скинути</button></div>
     <div class="wizard" id="wizard" hidden><p id="wizText"></p>
-      <div class="btns"><button class="btn small primary" id="bWizNext">Готово</button><button class="btn small" id="bWizCancel">Скасувати</button></div></div>
-    <label class="opt">Стійка
-      <select id="stance"><option value="regular">Regular (ліва нога спереду)</option><option value="goofy">Goofy (права нога спереду)</option></select></label>
+      <div class="btns"><button class="btn small primary" id="bWizNext" data-i18n="b.done">Готово</button><button class="btn small" id="bWizCancel" data-i18n="b.cancel">Скасувати</button></div></div>
+    <label class="opt"><span data-i18n="opt.stance"></span>
+      <select id="stance"><option value="regular" data-i18n="stance.regular"></option><option value="goofy" data-i18n="stance.goofy"></option></select></label>
   </div>
 
-  <div class="group">
-    <h3>Швидкість</h3>
-    <p>Triki не вимірює швидкість їзди. Її можна рахувати приблизно через GPS телефона, якщо він у тебе в кишені.</p>
-    <label class="opt">Рахувати швидкість через GPS<input type="checkbox" id="gps"></label>
-  </div>
-
-  <div class="group">
-    <h3>Інше</h3>
-    <label class="opt">Звук після трюку<input type="checkbox" id="beep"></label>
-    <div class="btns"><button class="btn small" id="bDemo">Демо без Triki</button></div>
-  </div>
-
-  <div class="group">
-    <h3>Дані</h3>
-    <p>Експорт зберігає всі трюки сесії разом із сирими даними сенсора. З них будуватимемо базу трюків.</p>
+  <div class="group cal" id="calGroup">
+    <h3 data-i18n="cal.title">Калібрування трюків (тимчасово)</h3>
+    <p data-i18n="cal.p"></p>
+    <ul class="cal-list" id="calList"></ul>
+    <p class="cal-status" id="calStatus" aria-live="polite"></p>
     <div class="btns">
-      <button class="btn small" id="bExport">Експортувати сесію</button>
-      <button class="btn small" id="bRec">Записати сирі дані</button>
+      <button class="btn small" id="bCalDel" data-i18n="cal.delLast">Видалити останній</button>
+      <button class="btn small primary" id="bCalApply" data-i18n="cal.apply">Застосувати</button>
+      <button class="btn small" id="bCalExport" data-i18n="cal.export">Експортувати записи</button>
+      <button class="btn small" id="bCalReset" data-i18n="cal.reset" hidden>Вимкнути калібрування</button>
+      <button class="btn small" id="bCalClear" data-i18n="cal.clear">Очистити все</button>
+    </div>
+    <p class="note" data-i18n="cal.note"></p>
+  </div>
+
+  <div class="group">
+    <h3 data-i18n="g.speed">Швидкість</h3>
+    <p data-i18n="speed.p"></p>
+    <label class="opt"><span data-i18n="opt.gps"></span><input type="checkbox" id="gps"></label>
+  </div>
+
+  <div class="group">
+    <h3 data-i18n="g.other">Інше</h3>
+    <label class="opt"><span data-i18n="opt.beep"></span><input type="checkbox" id="beep"></label>
+    <div class="btns"><button class="btn small" id="bDemo" data-i18n="b.demo">Демо без Triki</button></div>
+  </div>
+
+  <div class="group">
+    <h3 data-i18n="g.data">Дані</h3>
+    <p data-i18n="data.p"></p>
+    <div class="btns">
+      <button class="btn small" id="bExport" data-i18n="b.export">Експортувати сесію</button>
+      <button class="btn small" id="bRec" data-i18n="b.rec">Записати сирі дані</button>
     </div>
     <div class="export" id="exportBox" hidden><p id="exportName"></p><textarea id="exportText" readonly></textarea>
-      <div class="btns"><button class="btn small" id="bCopy">Копіювати</button><button class="btn small" id="bExportHide">Сховати</button></div></div>
+      <div class="btns"><button class="btn small" id="bCopy" data-i18n="b.copy">Копіювати</button><button class="btn small" id="bExportHide" data-i18n="b.hide">Сховати</button></div></div>
   </div>
 
   <div class="group">
-    <details><summary><b>Діагностика</b></summary>
+    <details><summary><b data-i18n="g.diag">Діагностика</b></summary>
       <div id="diag"></div>
-      <div class="btns" style="margin-top:10px"><button class="btn small" id="bCalib">Калібрувати (2 с спокою)</button><button class="btn small" id="bShareLog">Поділитись журналом</button></div>
+      <div class="btns" style="margin-top:10px"><button class="btn small" id="bCalib" data-i18n="b.calib">Калібрувати (2 с спокою)</button><button class="btn small" id="bShareLog" data-i18n="b.shareLog">Поділитись журналом</button></div>
       <div id="log"></div>
     </details>
   </div>
  </div>
 </div>
+<!--/BODY-->
 
-<noscript><p style="padding:16px">Для роботи потрібен JavaScript.</p></noscript>
+<noscript><p style="padding:16px">JavaScript is required.</p></noscript>
 <script type="module" src="js/main.js"></script>
 </body>
 </html>
