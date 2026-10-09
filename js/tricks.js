@@ -1,16 +1,16 @@
 // Пошук трюків у потоці: поп → політ → приземлення, підрахунок обертів, назва, чи вдалося приземлитись.
 import { S, bus } from './util.js';
-import { V, integrateQ } from './math.js';
-import { st, SAT, toBoard } from './sensor.js';
+import { V } from './math.js';
+import { st, SAT, mount } from './sensor.js';
 
 const IMPACT_G = 2.0, MIN_AIR = 0.15, MAX_AIR = 1.2, FREEFALL_G = 0.6, MIN_ROT = 150, LANDED_MAX_DPS = 300;
 
 export const TRICK_NAMES = ['Ollie', 'Kickflip', 'Heelflip', 'BS pop shuvit', 'FS pop shuvit', 'BS 360 shuvit',
   'FS 360 shuvit', 'Varial kickflip', 'Varial heelflip', 'Hardflip', 'Inward heelflip', '360 flip', 'Laser flip',
-  'Double kickflip', 'Double heelflip', 'Impossible', 'Інше'];
+  'Double kickflip', 'Double heelflip', 'Impossible', 'Other'];
 
 // Ділянки, де гіроскоп упирався в межу, домальовуємо параболою по сусідніх точках
-function repairRuns(col) {
+export function repairRuns(col) {
   const out = col.slice(), n = col.length;
   for (let i = 0; i < n;) {
     if (Math.abs(col[i]) < SAT) { i++; continue; }
@@ -33,12 +33,29 @@ function repairRuns(col) {
   return out;
 }
 
+// Сумарний поворот angS (градуси, осі Triki) → фліп / розворот / нахил з погляду райдера.
+// Додатний roll — у бік kickflip, додатний yaw — у бік BS shuvit.
+// M — кріплення на дошці; bf — дані вже в осях дошки (демо).
+export function axesOf(angS, M, bf) {
+  const cal = S.trickCal;
+  let roll, yaw, pitch;
+  if (cal && !bf && !cal.bf) {
+    roll = V.dot(angS, cal.flip); yaw = V.dot(angS, cal.shuv); pitch = V.dot(angS, cal.pitch);
+    if (S.stance !== cal.stance) { roll = -roll; yaw = -yaw; }
+  } else {
+    const b = bf || !M ? angS : [V.dot(M[0], angS), V.dot(M[1], angS), V.dot(M[2], angS)];
+    roll = b[0]; pitch = b[1]; yaw = b[2];
+    // демо вже записане з погляду regular-райдера, тож стійка на нього не впливає
+    if (S.stance === 'goofy' && !bf) { roll = -roll; yaw = -yaw; }
+  }
+  return { roll, pitch, yaw };
+}
+
 export function classify(roll, yaw, pitch) {
-  if (S.stance === 'goofy') { roll = -roll; yaw = -yaw; }
   const nf = Math.round(roll / 360), ns = Math.round(yaw / 180), rf = roll - nf * 360, rs = yaw - ns * 180, flags = [];
-  if (Math.abs(rf) > 50) flags.push(nf === 0 ? `частковий оберт ${Math.abs(roll).toFixed(0)}°`
-    : Math.abs(roll) < Math.abs(nf * 360) ? `недокручено на ${Math.abs(rf).toFixed(0)}°` : `перекручено на ${Math.abs(rf).toFixed(0)}°`);
-  if (Math.abs(rs) > 40) flags.push('неточний розворот');
+  if (Math.abs(rf) > 50) flags.push(nf === 0 ? { k: 'partial', d: Math.round(Math.abs(roll)) }
+    : Math.abs(roll) < Math.abs(nf * 360) ? { k: 'under', d: Math.round(Math.abs(rf)) } : { k: 'over', d: Math.round(Math.abs(rf)) });
+  if (Math.abs(rs) > 40) flags.push({ k: 'yaw' });
   if (Math.abs(pitch) > 270) return { name: 'Impossible', flags, conf: 0.6 };
   const af = Math.abs(nf), as = Math.abs(ns), kick = nf > 0, bs = ns > 0;
   let name;
@@ -48,20 +65,18 @@ export function classify(roll, yaw, pitch) {
   else if (!af && as === 2) name = (bs ? 'BS' : 'FS') + ' 360 shuvit';
   else if (af === 1 && as === 1) name = kick ? (bs ? 'Varial kickflip' : 'Hardflip') : (bs ? 'Inward heelflip' : 'Varial heelflip');
   else if (af === 1 && as === 2) name = kick ? (bs ? '360 flip' : 'FS 360 kickflip') : (bs ? 'BS 360 heelflip' : 'Laser flip');
-  else name = 'Інше';
+  else name = 'Other';
   return { name: name[0].toUpperCase() + name.slice(1), flags, conf: 1 - Math.min(1, (Math.abs(rf) / 180 + Math.abs(rs) / 90) / 2) };
 }
 
-// Запускається кожні 150 мс. Знайдений трюк — подія 'trick' (дані, кадри повтору, частота).
+// Запускається кожні 150 мс. Знайдений трюк — подія 'trick'.
 export function detect() {
   const B = st.buf;
   if (B.length < 20) return;
   const fs = st.fs, N = B.length, amag = B.map(s => s.amag), demo = st.source === 'demo';
   const cols = [0, 1, 2].map(i => repairRuns(B.map(s => s.raw[3 + i])));
-  const gyro = B.map((_, j) => {
-    const g = [0, 1, 2].map(i => (cols[i][j] - st.bias[i]) / S.gyroScale);
-    return demo ? g : toBoard(g);
-  });
+  // гіроскоп в осях Triki (°/с); довжина вектора від осей не залежить
+  const gyro = B.map((_, j) => [0, 1, 2].map(i => (cols[i][j] - st.bias[i]) / S.gyroScale));
 
   const dist = Math.max(1, Math.round(0.12 * fs)), peaks = [];
   for (let i = 1; i < N - 1; i++) {
@@ -94,19 +109,21 @@ export function detect() {
       for (let k = q + r(0.15); k < Math.min(N, q + r(0.9)); k++) { az += B[k].a[2]; cnt++; wob = Math.max(wob, V.len(gyro[k])); }
       az /= Math.max(1, cnt);
       const landed = az > 0.6 && wob < 400;
-      const reason = landed ? '' : az < -0.5 ? 'дошка перевернулась' : az < 0.6 ? 'дошка впала на бік' : 'нестабільне приземлення';
+      const reason = landed ? '' : az < -0.5 ? 'flipped' : az < 0.6 ? 'side' : 'unstable';
       let clipped = 0; for (let k = p; k <= q; k++) if (B[k].raw.slice(3).some(v => Math.abs(v) >= SAT)) clipped++;
 
-      const c = classify(ang[0], ang[2], ang[1]);
-      if (clipped) c.flags.push('частину обертання домальовано: сенсор упирався в межу');
+      const M = demo ? null : mount(), ax = axesOf(ang, M, demo);
+      const c = classify(ax.roll, ax.yaw, ax.pitch);
+      if (clipped) c.flags.push({ k: 'clipped' });
       const s0 = Math.max(0, p - r(1.0)), s1 = Math.min(N, q + r(0.9));
       const trick = {
-        ...c, air, height: 9.81 * air * air / 8 * 100, roll: ang[0], pitch: ang[1], yaw: ang[2],
-        landG: amag[q], peakSpin, landed, reason,
-        snip: { fs: +fs.toFixed(1), pop: p - s0, land: q - s0, rows: B.slice(s0, s1).map(s => s.raw) },
+        ...c, air, height: 9.81 * air * air / 8 * 100, roll: ax.roll, pitch: ax.pitch, yaw: ax.yaw,
+        angS: ang.map(v => +v.toFixed(1)), landG: amag[q], peakSpin, landed, reason,
+        snip: { fs: +fs.toFixed(1), pop: p - s0, land: q - s0, rows: B.slice(s0, s1).map(s => s.raw),
+                bias: st.bias.map(v => +v.toFixed(1)), M: M && M.map(r => r.map(v => +v.toFixed(4))), bf: demo || undefined },
       };
       st.lastLandN = B[q].n;
-      bus.emit('trick', trick, integrateQ(gyro.slice(p, q), fs), fs);
+      bus.emit('trick', trick);
       break;
     }
   }

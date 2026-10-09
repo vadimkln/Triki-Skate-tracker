@@ -17,7 +17,8 @@ export const bus = {
 
 export const logLines = [];
 export function log(msg) {
-  const line = new Date().toLocaleTimeString('uk-UA', { hour12: false }) + '  ' + msg;
+  const d = new Date(), z = v => String(v).padStart(2, '0');
+  const line = `${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}  ${msg}`;
   logLines.push(line);
   if (logLines.length > 500) logLines.shift();
   bus.emit('log', line);
@@ -45,6 +46,14 @@ export const S = Object.assign({
   beep: true,
   gps: false,
   mount: null,         // як Triki закріплений на дошці (майстер у налаштуваннях)
+  lang: null,          // null — за мовою телефона
+  device: null,        // збережений Triki: { id, name }
+  autoConnect: true,   // підключатись до збереженого Triki при відкритті сайту
+  trickCal: null,      // калібрування трюків: осі фліпа й shuvit у координатах Triki
+  mode: 'tracker',     // 'tracker' — датчик на дошці, 'game' — гра з Triki в руці
+  gameMode: 'free',    // 'free' або 'skate'
+  gameBest: 0, gameBestCombo: 0,
+  rpSpeed: 0.5,
 }, store.get('settings', {}));
 
 export function saveSettings() { store.set('settings', S); }

@@ -1,6 +1,7 @@
 // Дані з Triki: розбір пакетів, перерахунок в осі дошки, орієнтація, калібрування.
 import { S, log, bus } from './util.js';
 import { V, buildMount, mahony } from './math.js';
+import { t } from './i18n.js';
 
 export const SAT = 32766;   // значення, з якого сенсор «упирається в стелю»
 
@@ -13,6 +14,8 @@ export const st = {
   calib: null, calibInfo: null, autoMount: null,
   pktSizes: {}, unknown: 0,
   rec: null,                // запис сирих даних
+  calRec: null,             // сирі дані під час калібрування трюків
+  tap: null,                // обробник кожного виміру для гри
   collect: null,            // збір для майстра положення
   connectedAt: 0,
   airSince: null,           // з якого моменту дошка у вільному падінні
@@ -26,7 +29,7 @@ export function toBoard(v) {
 export const hz = () => st.arrivals.length / 2;
 
 export function resetLive() {
-  Object.assign(st, { buf: [], n: 0, arrivals: [], fs: 25, q: [1, 0, 0, 0], lastLandN: -1, pktSizes: {},
+  Object.assign(st, { buf: [], n: 0, arrivals: [], fs: 25, fixedFs: null, q: [1, 0, 0, 0], lastLandN: -1, pktSizes: {},
                       unknown: 0, connectedAt: performance.now(), airSince: null });
 }
 
@@ -50,7 +53,7 @@ export function splitFrames(bytes, dv) {
 export function onNotify(e) {
   const dv = e.target.value, now = performance.now();
   const bytes = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
-  if (!st.pktSizes[bytes.length]) log(`Розмір пакета ${bytes.length} Б`);
+  if (!st.pktSizes[bytes.length]) log(t('log.packet', { n: bytes.length }));
   st.pktSizes[bytes.length] = (st.pktSizes[bytes.length] || 0) + 1;
   const frames = splitFrames(bytes, dv);
   if (!frames.length) { st.unknown++; return; }
@@ -61,14 +64,17 @@ export function onNotify(e) {
 export function ingest(raw, now, boardFrame) {
   st.n++;
   if (st.rec) st.rec.rows.push([((now - st.rec.t0) / 1000).toFixed(4), ...raw]);
+  if (st.calRec && st.calRec.rows.length < 30000) st.calRec.rows.push([Math.round(now - st.calRec.t0), ...raw]);
   if (st.calib) st.calib.push(raw.slice());
   if (st.collect) st.collect.push(raw.slice());
   st.arrivals.push(now);
   while (st.arrivals.length && st.arrivals[0] < now - 2000) st.arrivals.shift();
-  if (now - st.connectedAt > 1500 && st.arrivals.length > 5) st.fs = 0.7 * st.fs + 0.3 * hz();
+  if (st.fixedFs) st.fs = st.fixedFs;              // демо: частота відома точно
+  else if (now - st.connectedAt > 1500 && st.arrivals.length > 5) st.fs = 0.7 * st.fs + 0.3 * hz();
 
   let a = raw.slice(0, 3).map(v => v / S.accScale);
   let g = raw.slice(3, 6).map((v, i) => (v - st.bias[i]) / S.gyroScale);
+  if (st.tap) st.tap(a, g, now);                     // режим гри: сирі осі Triki
   if (!boardFrame) { a = toBoard(a); g = toBoard(g); }
   const amag = V.len(a);
   st.buf.push({ n: st.n, raw, a, g, amag });
@@ -97,20 +103,20 @@ export function stillStats(c) {
 
 export function startCalib(auto) {
   st.calib = [];
-  if (!auto) log('Калібрування: не рухай Triki 2 с…');
+  if (!auto) log(t('log.calibStart'));
   setTimeout(() => finishCalib(auto), 2000);
 }
 function finishCalib(auto) {
   const c = st.calib; st.calib = null;
-  if (!c || c.length < 5) { if (!auto) log('Калібрування: замало даних'); return; }
+  if (!c || c.length < 5) { if (!auto) log(t('log.calibFew')); return; }
   const s = stillStats(c);
-  if (s.gyroSd > 3 || s.magSd > 0.05 * s.magMean) { if (!auto) log('Калібрування: Triki рухався. Поклади його нерухомо.'); return; }
+  if (s.gyroSd > 3 || s.magSd > 0.05 * s.magMean) { if (!auto) log(t('log.calibMoved')); return; }
   st.bias = s.bias;
   if (st.source === 'demo') return;
   st.calibInfo = { lsb: Math.round(s.magMean) };
   if (!S.mount) st.autoMount = buildMount(s.acc, null);    // хоча б «де верх», доки немає налаштування
   st.q = [1, 0, 0, 0];
-  log(`Калібрування: 1 g = ${Math.round(s.magMean)}, дрейф ${s.bias.map(v => (v / S.gyroScale).toFixed(1)).join(' / ')} °/с`);
+  log(t('log.calibDone', { lsb: Math.round(s.magMean), drift: s.bias.map(v => (v / S.gyroScale).toFixed(1)).join(' / ') }));
   bus.emit('calib');
 }
 

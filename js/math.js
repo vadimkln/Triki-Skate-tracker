@@ -22,10 +22,16 @@ export function buildMount(gFlat, gNose) {
   return [x, y, z];
 }
 
+// Точний крок повороту (через вісь і кут): при 25 Гц і швидкому фліпі за крок буває 60°,
+// і проста лінійна формула там помітно «недокручує»
 function qStep(q, gx, gy, gz, dt) {
-  const [w, x, y, z] = q, h = 0.5 * dt;
-  const r = [w + (-x * gx - y * gy - z * gz) * h, x + (w * gx + y * gz - z * gy) * h,
-             y + (w * gy - x * gz + z * gx) * h, z + (w * gz + x * gy - y * gx) * h];
+  const th = Math.hypot(gx, gy, gz) * dt;
+  if (th < 1e-9) return q;
+  const s = Math.sin(th / 2) / (th / dt), c = Math.cos(th / 2);
+  const dx = gx * s, dy = gy * s, dz = gz * s;
+  const [w, x, y, z] = q;
+  const r = [w * c - x * dx - y * dy - z * dz, w * dx + x * c + y * dz - z * dy,
+             w * dy - x * dz + y * c + z * dx, w * dz + x * dy - y * dx + z * c];
   const n = Math.hypot(r[0], r[1], r[2], r[3]);
   return [r[0] / n, r[1] / n, r[2] / n, r[3] / n];
 }

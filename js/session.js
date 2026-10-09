@@ -11,7 +11,18 @@ export const nameOf = t => t.label || t.name;
 export const landedOf = t => (t.landedOverride != null ? t.landedOverride : t.landed);
 export const liveTricks = () => session.tricks.filter(t => !t.deleted);
 
+// Демо грає в окремій тимчасовій сесії: справжня статистика лишається недоторканою
+let realSession = null;
+export const isDemoSession = () => !!realSession;
+export function setDemoSession(on) {
+  if (on && !realSession) { realSession = session; session = newSession(); }
+  else if (!on && realSession) { session = realSession; realSession = null; }
+  else return;
+  bus.emit('session');
+}
+
 export function saveSession() {
+  if (realSession) return;                       // демо-сесію не зберігаємо
   if (store.set('session', session)) return;
   // місце закінчилось — прибираємо сирі дані найстаріших трюків
   for (const t of session.tricks) { if (t.snip) { delete t.snip; if (store.set('session', session)) return; } }
@@ -48,6 +59,7 @@ export function summarize(s = session) {
 export function history() { return store.get('history', []); }
 
 export function archiveSession() {
+  if (realSession) { session = newSession(); bus.emit('session'); return; }
   const sum = summarize(session);
   if (sum.attempts) {
     const h = history();

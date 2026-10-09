@@ -1,6 +1,7 @@
 // Приблизна швидкість їзди через GPS телефона (Triki швидкість не міряє).
 import { log, bus } from './util.js';
 import { session, saveSession } from './session.js';
+import { t } from './i18n.js';
 
 let watch = null, last = null;
 export let speedKmh = null;
@@ -10,8 +11,8 @@ export function setGps(on) {
   speedKmh = null; last = null;
   bus.emit('speed', null);
   if (!on) return;
-  if (!navigator.geolocation) { log('GPS недоступний у цьому браузері'); return; }
-  watch = navigator.geolocation.watchPosition(onPos, e => log('GPS: ' + e.message),
+  if (!navigator.geolocation) { log(t('log.gpsNo')); return; }
+  watch = navigator.geolocation.watchPosition(onPos, e => log(t('log.gps', { e: e.message })),
     { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 });
 }
 
