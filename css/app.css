@@ -18,13 +18,28 @@ button, select, input { font: inherit; color: inherit }
 button { cursor: pointer }
 :focus-visible { outline: 3px solid var(--grip); outline-offset: 2px; box-shadow: 0 0 0 6px var(--curb) }
 
+/* ---------- верхня смуга: назва й перемикач режимів ---------- */
+.appbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #D2D4D2;
+          padding: calc(env(safe-area-inset-top) + 8px) 16px 4px }
+.brand { font: italic 800 22px/1 var(--cond); letter-spacing: .01em; text-transform: uppercase }
+.modes { display: inline-flex; border: 2px solid var(--grip); border-radius: 12px; overflow: hidden; flex: none }
+.modes button { min-height: 40px; min-width: 76px; padding: 0 14px; border: 0; background: transparent; font: 600 18px/1 var(--cond) }
+.modes button + button { border-left: 2px solid var(--grip) }
+.modes button.on { background: var(--grip); color: var(--curb) }
+.modes-sm { margin: 0 0 4px }
+.modes-sm button { min-width: 0; font-size: 17px }
+
 /* ---------- 3D ---------- */
 .hero { position: relative; height: 78svh; min-height: 420px; background: #D2D4D2; overflow: hidden }
 #scene { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: pan-y }
-.top { position: absolute; left: 0; right: 0; top: 0; padding: calc(env(safe-area-inset-top) + 12px) 16px 0;
+.top { position: absolute; left: 0; right: 0; top: 0; padding: 6px 16px 0;
        display: flex; align-items: center; justify-content: space-between; gap: 12px; pointer-events: none }
 .top > * { pointer-events: auto }
 .conn { display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 15px; min-height: 44px }
+.demo-exit { min-height: 44px; border: 0; background: none; padding: 0 0 0 6px; display: flex; align-items: center }
+.demo-exit > span { display: inline-flex; align-items: center; gap: 7px; background: var(--grip); color: #fff; border-radius: 999px; padding: 7px 12px 7px 14px; font-size: 14px }
+.demo-exit b { font-weight: 700 }
+.demo-note { margin: 24px 0 0; padding: 12px 14px; border-left: 4px solid var(--curb); background: var(--slab); font-size: 15px }
 .dot { width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--grip); flex: none }
 .dot.on { background: var(--grip) }
 .dot.wait { border-style: dashed; animation: spin 1.6s linear infinite }
@@ -32,7 +47,7 @@ button { cursor: pointer }
 .speed { font: 600 22px/1 var(--cond); font-variant-numeric: tabular-nums }
 .speed small { font: 500 14px var(--sans); margin-left: 3px }
 .icon { width: 44px; height: 44px; border: 0; background: transparent; display: grid; place-items: center; border-radius: 50% }
-.air { position: absolute; left: 50%; top: calc(env(safe-area-inset-top) + 64px); transform: translateX(-50%);
+.air { position: absolute; left: 50%; top: 58px; transform: translateX(-50%);
        background: var(--curb); font: 800 20px/1 var(--cond); padding: 8px 16px; border-radius: 999px; display: none }
 .air.show { display: block }
 
@@ -49,8 +64,96 @@ button { cursor: pointer }
 .ct { font: 700 14px/1 var(--sans); font-style: normal; text-shadow: none; padding: 6px 9px; border-radius: 6px; transform: skewX(4deg) }
 .ct.ok { background: var(--curb); color: #000 }
 .ct.bail { background: var(--fail); color: #fff }
+.ct.cal { background: #fff; color: #000 }
 .cta { position: absolute; left: 16px; right: 16px; bottom: calc(env(safe-area-inset-bottom) + 20px); display: grid; gap: 6px; max-width: 420px }
 .cta .link { color: #fff }
+.cta-hint { margin: 0; color: #fff; font-size: 14px; line-height: 1.35; text-shadow: 0 1px 2px rgba(0, 0, 0, .55) }
+.viewing .cta, .viewing .callout, .viewing .air { display: none !important }
+
+/* ---------- гра ---------- */
+.hud { position: absolute; inset: 0; pointer-events: none }
+.hud-top { position: absolute; left: 16px; right: 16px; top: 56px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center }
+.hud-score { display: flex; align-items: center; gap: 10px }
+.hud-score b { font: 800 46px/1 var(--cond); font-variant-numeric: tabular-nums }
+.hud-combo { background: var(--curb); font: italic 800 20px/1 var(--cond); padding: 6px 10px 5px; border-radius: 8px; transform: skewX(-8deg) }
+.hud-combo.bump { animation: slamc .3s cubic-bezier(.2, .9, .25, 1.3) }
+@keyframes slamc { from { transform: skewX(-8deg) scale(1.5) } to { transform: skewX(-8deg) scale(1) } }
+.hud-skate { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: center }
+.hud-target { display: flex; flex-direction: column; align-items: flex-start; line-height: 1 }
+.hud-target small { font: 600 13px var(--sans); text-transform: uppercase; letter-spacing: .08em; color: var(--ink2) }
+.hud-target b { font: italic 800 28px/1.05 var(--cond) }
+.letters { display: flex; gap: 4px }
+.letters span { width: 28px; height: 32px; display: grid; place-items: center; border: 2px solid var(--grip); border-radius: 6px; font: 800 19px/1 var(--cond); color: rgba(0, 0, 0, .3) }
+.letters span.got { background: var(--fail); border-color: var(--fail); color: #fff }
+.hud-status { background: rgba(0, 0, 0, .62); color: #fff; font-weight: 500; font-size: 15px; padding: 7px 14px; border-radius: 999px; font-variant-numeric: tabular-nums }
+.hud-status.inair { background: var(--curb); color: #000; font-weight: 700 }
+.hud-status.bad { background: var(--fail); color: #fff }
+.hud-status:empty { display: none }
+.level { position: absolute; right: 16px; bottom: calc(env(safe-area-inset-bottom) + 20px); width: 92px; height: 92px; border-radius: 50%;
+         background: rgba(0, 0, 0, .38); border: 2px solid rgba(255, 255, 255, .8) }
+.level i { position: absolute; left: 50%; top: 50%; display: block }
+.level .ring { border: 2px dashed var(--curb); border-radius: 50%; transform: translate(-50%, -50%) }
+.level .ring.pop { border-style: solid; box-shadow: 0 0 0 3px rgba(243, 195, 22, .45) }
+.level .cross { width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .55) }
+.level .bub { width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: var(--curb); box-shadow: 0 1px 3px rgba(0, 0, 0, .5) }
+.game #air, .game .calbar { display: none !important }
+.game .cl0 { font-size: clamp(36px, 10vw, 54px) }
+.game .callout { right: 124px }
+.ct.pts { background: var(--curb); color: #000 }
+.howto-box summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between }
+.howto-box summary::-webkit-details-marker { display: none }
+.howto-box summary::after { content: '+'; font: 600 30px/1 var(--cond) }
+.howto-box[open] summary::after { content: '−' }
+.howto-box summary h2 { margin: 0 }
+.how-intro { margin: 12px 0 0 }
+.howto { margin: 12px 0 0; padding-left: 22px; display: grid; gap: 10px }
+.howto li { padding-left: 4px }
+.game-btns { margin-top: 12px }
+.grow { cursor: default }
+.row .tg { display: block; font: 500 13px/1.3 var(--sans); color: var(--ink2) }
+
+/* Запис калібрування: червона смуга під верхнім рядком */
+.calbar { position: absolute; left: 16px; right: 16px; top: 54px; z-index: 2;
+          display: flex; align-items: center; justify-content: space-between; gap: 10px;
+          background: var(--fail); color: #fff; border-radius: 12px; padding: 5px 5px 5px 14px; font: italic 800 19px/1.1 var(--cond) }
+.calbar span::before { content: ''; display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #fff; margin-right: 8px; vertical-align: 2px; animation: blink 1.1s steps(2, start) infinite }
+@keyframes blink { to { visibility: hidden } }
+.calbar-stop { min-height: 40px; border: 0; border-radius: 9px; background: #fff; color: #000; font: 700 15px var(--sans); padding: 0 16px; flex: none }
+.calbar:not([hidden]) ~ .air { top: 112px }
+
+/* ---------- повтор із таймлайном ---------- */
+.rp { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; color: #fff;
+      background: rgba(12, 12, 12, .9); border-top: 3px solid var(--curb);
+      padding: 10px 16px calc(env(safe-area-inset-bottom) + 10px) }
+@media (min-width: 800px) { .rp { padding-left: calc(50% - 380px); padding-right: calc(50% - 380px) } }
+.rp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px }
+.rp-title { display: flex; align-items: center; gap: 10px; min-width: 0 }
+.rp-tag { font: italic 800 15px/1 var(--cond); text-transform: uppercase; letter-spacing: .06em; background: var(--curb); color: #000;
+          padding: 6px 10px 5px; transform: skewX(-10deg); flex: none }
+.rp-name { font: italic 800 27px/1.05 var(--cond); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.rp-x { width: 44px; height: 44px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, .12); color: #fff; display: grid; place-items: center; flex: none }
+.rp-read { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 4px }
+.rp-tc { font: 800 36px/1 var(--cond); font-variant-numeric: tabular-nums }
+.rp-meta { display: flex; flex-direction: column; align-items: flex-end; font: 500 13px/1.35 var(--sans); color: rgba(255, 255, 255, .72); font-variant-numeric: tabular-nums }
+.rp-vals { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 6px; font: 500 13px/1.2 var(--sans); color: rgba(255, 255, 255, .66) }
+.rp-vals i { font-style: normal }
+.rp-vals b { color: #fff; font: 600 18px/1 var(--cond); font-variant-numeric: tabular-nums; margin-left: 2px }
+.rp-track { display: block; width: 100%; height: 56px; margin-top: 8px; touch-action: none; cursor: ew-resize; border-radius: 6px }
+.rp-ctl { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px }
+.rp-btns { display: flex; align-items: center; gap: 2px }
+.rp-b { width: 40px; height: 44px; border: 0; border-radius: 50%; background: transparent; color: #fff; display: grid; place-items: center; padding: 0 }
+.rp-b svg { width: 22px; height: 22px; fill: currentColor }
+.rp-b:active { background: rgba(255, 255, 255, .16) }
+.rp-play { width: 50px; height: 50px; background: var(--curb); color: #000; margin: 0 3px }
+.rp-play svg { width: 26px; height: 26px }
+.rp-speed { display: flex; border: 2px solid rgba(255, 255, 255, .45); border-radius: 10px; overflow: hidden; flex: none }
+.rp-speed button { min-width: 38px; height: 40px; border: 0; background: transparent; color: #fff; font: 600 16px/1 var(--cond); padding: 0 3px }
+.rp-speed button.on { background: #fff; color: #000 }
+.rp-hint { position: absolute; left: 50%; bottom: calc(100% + 12px); transform: translateX(-50%); margin: 0; white-space: nowrap;
+           background: rgba(0, 0, 0, .6); color: #fff; font-size: 13px; padding: 7px 12px; border-radius: 999px; transition: opacity .6s; pointer-events: none }
+.rp-hint.fade { opacity: 0 }
+.rp :focus-visible { outline: 3px solid #fff; outline-offset: 2px; box-shadow: 0 0 0 6px var(--curb) }
+@media (max-width: 379px) { #rpStart, #rpEnd { display: none } }
 
 /* ---------- кнопки ---------- */
 .btn { min-height: 50px; padding: 0 18px; border-radius: 12px; border: 2px solid var(--grip); background: transparent; font-weight: 700; font-size: 17px }
@@ -81,14 +184,21 @@ h2 { font: 600 30px/1.05 var(--cond); margin: 0 0 14px }
 
 .list { list-style: none; margin: 0; padding: 0 }
 .list > li { border-top: 1px solid var(--rule) }
-.row { width: 100%; display: grid; grid-template-columns: 50px 1fr auto 28px; gap: 10px; align-items: baseline;
-       padding: 12px 0; border: 0; background: none; text-align: left }
+.row-w { display: grid; grid-template-columns: 1fr 44px; align-items: center }
+.row { width: 100%; display: grid; grid-template-columns: 46px 1fr auto 22px; gap: 10px; align-items: baseline;
+       padding: 12px 0; border: 0; background: none; text-align: left; min-height: 48px }
+.row-ed { width: 44px; height: 44px; border: 0; background: none; display: grid; place-items: center; border-radius: 10px; color: var(--ink2) }
+.row-ed[aria-expanded=true] { background: var(--grip); color: var(--slab) }
+.list > li.playing { box-shadow: inset 4px 0 0 var(--curb); padding-left: 10px; background: rgba(243, 195, 22, .12) }
 .row .t { color: var(--ink2); font-size: 14px; font-variant-numeric: tabular-nums }
 .row .n { font: 600 21px/1.1 var(--cond) }
 .row .v { font-variant-numeric: tabular-nums; font-weight: 500 }
 .row .r { font-weight: 700; text-align: center }
 .row .r.fail { color: var(--fail) }
-.edit { padding: 0 0 14px 60px; display: grid; gap: 10px }
+.edit { padding: 0 0 14px 56px; display: grid; gap: 10px }
+.edit .note { margin: 0 }
+.last-replay { margin-top: 16px; display: inline-flex; align-items: center; gap: 8px }
+.last-replay svg { fill: currentColor }
 .seg { display: flex; gap: 8px; flex-wrap: wrap }
 .edit select, .opt select { min-height: 40px; border-radius: 10px; border: 2px solid var(--grip); background: transparent; padding: 0 10px }
 
@@ -113,7 +223,7 @@ details.history summary { cursor: pointer; font-weight: 600; padding: 8px 0 }
 .sheet-inner { max-width: 640px; margin: 0 auto }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; position: sticky; top: -8px; background: var(--slab); padding: 8px 0; z-index: 1 }
 .sheet-head h2 { margin: 0 }
-.group { padding: 18px 0; border-top: 1px solid var(--rule) }
+.group { padding: 18px 0; border-top: 1px solid var(--rule); scroll-margin-top: 64px }
 .group h3 { font: 600 22px/1.1 var(--cond); margin: 0 0 10px }
 .group p { margin: 0 0 10px; color: var(--ink2); font-size: 15px }
 .btns { display: flex; gap: 8px; flex-wrap: wrap }
@@ -121,6 +231,13 @@ details.history summary { cursor: pointer; font-weight: 600; padding: 8px 0 }
 .opt input[type=checkbox] { width: 24px; height: 24px; accent-color: #000; flex: none }
 .wizard { margin-top: 10px; padding: 14px; border: 2px solid var(--grip); border-radius: 12px }
 .wizard p { color: var(--grip) }
+.cal-list { list-style: none; margin: 4px 0 12px; padding: 0 }
+.cal-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--rule) }
+.cal-n { font: 600 21px/1.1 var(--cond) }
+.cal-c { color: var(--ink2); font-size: 14px; font-variant-numeric: tabular-nums }
+.cal-row .btn { min-width: 84px }
+.cal-row.rec .cal-n { color: var(--fail) }
+.cal-status { color: var(--grip) !important; font-weight: 500 }
 #log { font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; max-height: 220px; overflow: auto; white-space: pre-wrap; color: var(--ink2); margin-top: 10px }
 #diag { font-size: 14px; color: var(--ink2); font-variant-numeric: tabular-nums }
 .export { margin-top: 12px }
@@ -130,5 +247,6 @@ details.history summary { cursor: pointer; font-weight: 600; padding: 8px 0 }
 @media (min-width: 900px) { .hero { height: 72vh } }
 @media (prefers-reduced-motion: reduce) {
   .sheet, .sheet-bg, .callout { transition: none }
-  .dot.wait, .cl0.enter { animation: none }
+  .dot.wait, .cl0.enter, .calbar span::before { animation: none }
+  .rp-hint { transition: none }
 }
