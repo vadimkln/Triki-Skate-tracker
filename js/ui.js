@@ -1,5 +1,5 @@
 // Усе, що бачить користувач: підпис трюку на 3D, останній трюк, список, статистика, налаштування.
-import { $, esc, S, saveSettings, bus, log, logLines } from './util.js';
+import { $, esc, S, saveSettings, bus, log, logLines, VERSION } from './util.js';
 import { session, liveTricks, nameOf, landedOf, editTrick, summarize, history, archiveSession, isDemoSession, isPreloaded } from './session.js';
 import { TRICK_NAMES, resetYawLearn } from './tricks.js';
 import { st, hz, collectStill } from './sensor.js';
@@ -206,7 +206,7 @@ export function closeSheet() {
 }
 
 function renderDiag() {
-  $('diag').innerHTML = `${t('diag.rate')}: ${st.source ? num(hz(), 1) + ' ' + t('unit.hz') : '—'}<br>${t('diag.samples')}: ${st.n}<br>` +
+  $('diag').innerHTML = `${t('diag.version')}: ${VERSION}<br>${t('diag.rate')}: ${st.source ? num(hz(), 1) + ' ' + t('unit.hz') : '—'}<br>${t('diag.samples')}: ${st.n}<br>` +
     `${t('diag.packets')}: ${Object.entries(st.pktSizes).map(([k, v]) => `${k} ${t('diag.bytes')} (${v})`).join(', ') || '—'}<br>` +
     `${t('diag.calib')}: ${st.calibInfo ? '1 g = ' + st.calibInfo.lsb : t('diag.calibNo')}` +
     (st.shifted ? `<br>${t('diag.shifted')}: ${st.shifted}` : '');

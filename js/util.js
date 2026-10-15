@@ -36,6 +36,9 @@ export const store = {
   },
 };
 
+// Версію підставляє збирання (build_site.py); у розробці через модулі — 'dev'
+export const VERSION = typeof TRIKI_VERSION !== 'undefined' ? TRIKI_VERSION : 'dev';
+
 export const S = Object.assign({
   accScale: 2048,      // ±16 g — перевірено на реальному Triki
   gyroScale: 16.4,     // ±2000 °/с

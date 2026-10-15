@@ -2,7 +2,7 @@
 import * as THREE from '../vendor/three.module.min.js';
 import { buildBoard, DECK_Y } from './board.js';
 import { asphaltTextures } from './textures.js';
-import { sampleTrack } from './replay.js';
+import { sampleTrack, slerp } from './replay.js';
 import { st } from './sensor.js';
 import { bus, log, S } from './util.js';
 import { t } from './i18n.js';
@@ -12,6 +12,7 @@ let R = null;                       // renderer, scene, camera, root…
 let replay = null;                  // поточний повтор трюку
 const orbit = { on: false, az: 0, el: 0, shift: 0, drag: null };  // камера в режимі перегляду повтору
 const phys = { y: DECK_Y, vy: 0, restY: DECK_Y };
+let qLive = [1, 0, 0, 0];             // жива орієнтація, злегка згладжена між вимірами
 let contact = [];                   // точки моделі, якими вона може торкатись землі
 const tmp = new THREE.Vector3(), qThree = new THREE.Quaternion();
 
@@ -206,7 +207,9 @@ export const rp = {
 function frame(now) {
   const dt = Math.min(0.05, (now - R.last) / 1000); R.last = now;
   // у грі дошка стоїть, поки не покаже розпізнаний трюк
-  let qb = S.mode === 'game' ? [1, 0, 0, 0] : st.q, lift = null;
+  // виміри приходять 10–25 разів на секунду пачками — між ними дошку ведемо плавно (~40 мс), без ривків
+  qLive = slerp(qLive, st.q, 1 - Math.exp(-dt / 0.04));
+  let qb = S.mode === 'game' ? [1, 0, 0, 0] : qLive, lift = null;
   if (replay) {
     const r = replay;
     if (r.playing) {

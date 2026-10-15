@@ -1,5 +1,5 @@
 // Точка входу: з'єднує модулі між собою.
-import { $, S, saveSettings, bus, log } from './util.js';
+import { $, S, saveSettings, bus, log, VERSION } from './util.js';
 import { t, num, applyStatic } from './i18n.js';
 import { st, startCalib } from './sensor.js';
 import { detect, resetYawLearn } from './tricks.js';
@@ -97,6 +97,7 @@ if (globalThis.TRIKI_PRELOAD) {
 }
 
 applyStatic();
+log('Triki Skate ' + VERSION);
 ui.wireSettings({
   connect,
   forget,

@@ -1,6 +1,6 @@
 // Дані з Triki: розбір пакетів, перерахунок в осі дошки, орієнтація, калібрування.
 import { S, log, bus } from './util.js';
-import { V, buildMount, mahony } from './math.js';
+import { V, buildMount, mahony, upOf, qFromTo, qMul, slerp } from './math.js';
 import { t } from './i18n.js';
 
 export const SAT = 32766;   // значення, з якого сенсор «упирається в стелю»
@@ -29,7 +29,7 @@ export const hz = () => st.arrivals.length / 2;
 
 export function resetLive() {
   Object.assign(st, { buf: [], n: 0, arrivals: [], fs: 25, fixedFs: null, q: [1, 0, 0, 0], lastLandN: -1, pktSizes: {},
-                      lastImpact: -1e9, lastSpinT: -1e9, lowRun: 0, lastTakeoff: -1e9, lastT: null, shifted: 0,
+                      lastImpact: -1e9, lastSpinT: -1e9, lowRun: 0, lastTakeoff: -1e9, lastT: null, shifted: 0, aLP: null, lastFast: -1e9, ground: false,
                       unknown: 0, connectedAt: performance.now(), airSince: null });
 }
 
@@ -51,7 +51,10 @@ export function splitFrames(bytes, dv) {
 }
 
 export function onNotify(e) {
-  const dv = e.target.value, now = performance.now();
+  // час події (коли браузер отримав пакет), якщо він правдоподібний: так 3D-сцена, що займає
+  // потік, не зсуває час вимірів; інакше — момент обробки
+  const pn = performance.now(), ts = e.timeStamp;
+  const dv = e.target.value, now = ts > 0 && ts <= pn + 1 && pn - ts < 1000 ? ts : pn;
   const bytes = new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength);
   if (!st.pktSizes[bytes.length]) log(t('log.packet', { n: bytes.length }));
   st.pktSizes[bytes.length] = (st.pktSizes[bytes.length] || 0) + 1;
@@ -108,12 +111,30 @@ export function ingest(raw, now, boardFrame) {
   st.lowRun = a[2] < 0.35 || amag < 0.5 ? (st.lowRun || 0) + 1 : 0;
   if (!st.airSince && now - (st.lastTakeoff || -1e9) > 800 && now - (st.lastImpact || -1e9) < 350 && now - (st.lastSpinT || -1e9) < 250 && st.lowRun >= 2) {
     st.airSince = now; st.lastTakeoff = now; bus.emit('takeoff');
-  } else if (st.airSince && ((amag >= 2 && a[2] > 0.5) || now - st.airSince > 1200)) st.airSince = null;
+  } else if (st.airSince && ((amag >= 2 && a[2] > 0.5) || now - st.airSince > 1200)) {
+    st.airSince = null; st.aLP = [0, 0, 1];            // приземлились: «верх» рахуємо заново, без сил польоту
+  }
 
-  // коли дошка спокійно стоїть чи котиться, швидко «довіряємо» гравітації — інакше після трюку
-  // 3D-дошка ще секунду повільно вирівнюється, хоча насправді вже стоїть на чотирьох колесах
-  const kp = gmag < 60 && Math.abs(amag - 1) < 0.12 ? 8 : 2;
-  st.q = mahony(st.q, g.map(v => v * Math.PI / 180), amag < 3.5 ? a : [0, 0, 0], dt, kp);
+  // Орієнтація для живої 3D-дошки.
+  // Поки дошка на землі, вона лежить рівно на колесах — так її й показуємо. Інакше на плитці 3D-дошка
+  // тремтить (кожен шов — удар, що хитає акселерометр), а коли розганяєшся чи гальмуєш, «верх»
+  // з акселерометра нахиляється, і модель сама задирає ніс, хоча насправді дошка рівна.
+  // «На землі» — не в повітрі, вже 0,2 с не крутиться, і згладжене прискорення показує, що дошка
+  // приблизно колесами вниз (так перевертання після падіння не сховається).
+  const lpk = amag < 3.5 ? 1 - Math.exp(-dt / 0.3) : 0;
+  st.aLP = st.aLP ? V.add(st.aLP, V.mul(V.sub(a, st.aLP), lpk)) : a.slice();
+  if (gmag > 120 && amag < 3.5) st.lastFast = now;
+  const lp = V.len(st.aLP), flatCos = lp > 0 ? st.aLP[2] / lp : 0;
+  st.ground = !st.airSince && now - (st.lastFast || -1e9) > 200 && lp > 0.7 && lp < 1.4 && flatCos > Math.cos(25 * Math.PI / 180);
+  // у повітрі й одразу після різкого обертання — лише гіроскоп: ноги б'ють по дошці зверху, і акселерометр
+  // показує «верх» хибно; коли дошка лежить як завгодно (наприклад, догори дном після падіння) — гравітація
+  const free = st.airSince || now - (st.lastFast || -1e9) < 300;
+  st.q = mahony(st.q, g.map(v => v * Math.PI / 180), amag < 3.5 ? a : [0, 0, 0], dt, st.ground || free ? 0 : 1);
+  if (st.ground) {
+    // плавно (за ~0,1 с) кладемо дошку рівно, не чіпаючи напрямок, куди дивиться ніс
+    const corr = qFromTo([0, 0, 1], upOf(st.q));
+    st.q = qMul(st.q, slerp([1, 0, 0, 0], corr, 1 - Math.exp(-dt / 0.1)));
+  }
 }
 
 // ---------- калібрування ----------
