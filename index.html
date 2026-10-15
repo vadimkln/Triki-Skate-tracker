@@ -32,7 +32,6 @@
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
     </button>
   </div>
-  <div class="calbar" id="calBar" hidden><span id="calBarText"></span><button class="calbar-stop" id="calBarStop" data-i18n="cal.stop">Стоп</button></div>
   <div class="air" id="air" data-i18n="air">У повітрі</div>
   <div class="callout" id="callout" aria-live="polite"></div>
 
@@ -89,6 +88,7 @@
 <main>
  <div id="trackerMain">
   <p class="demo-note" id="demoNote" data-i18n="demo.note" hidden></p>
+  <p class="demo-note" id="preloadNote" data-i18n="preload.note" hidden></p>
   <section>
     <h2 data-i18n="h.last">Останній трюк</h2>
     <div id="last"></div>
@@ -175,21 +175,6 @@
       <div class="btns"><button class="btn small primary" id="bWizNext" data-i18n="b.done">Готово</button><button class="btn small" id="bWizCancel" data-i18n="b.cancel">Скасувати</button></div></div>
     <label class="opt"><span data-i18n="opt.stance"></span>
       <select id="stance"><option value="regular" data-i18n="stance.regular"></option><option value="goofy" data-i18n="stance.goofy"></option></select></label>
-  </div>
-
-  <div class="group cal" id="calGroup">
-    <h3 data-i18n="cal.title">Калібрування трюків (тимчасово)</h3>
-    <p data-i18n="cal.p"></p>
-    <ul class="cal-list" id="calList"></ul>
-    <p class="cal-status" id="calStatus" aria-live="polite"></p>
-    <div class="btns">
-      <button class="btn small" id="bCalDel" data-i18n="cal.delLast">Видалити останній</button>
-      <button class="btn small primary" id="bCalApply" data-i18n="cal.apply">Застосувати</button>
-      <button class="btn small" id="bCalExport" data-i18n="cal.export">Експортувати записи</button>
-      <button class="btn small" id="bCalReset" data-i18n="cal.reset" hidden>Вимкнути калібрування</button>
-      <button class="btn small" id="bCalClear" data-i18n="cal.clear">Очистити все</button>
-    </div>
-    <p class="note" data-i18n="cal.note"></p>
   </div>
 
   <div class="group">

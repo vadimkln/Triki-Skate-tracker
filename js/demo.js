@@ -3,7 +3,7 @@
 //  • гра — «рука» тримає Triki й робить жести-трюки (поп, фліп, розворот).
 // Дані трекера вже в осях дошки: x — ніс, y — ліво, z — вгору; додатний фліп — kickflip, додатний розворот — BS.
 import { bus, log } from './util.js';
-import { V, mahony } from './math.js';
+import { V, mahony, qMul, upOf } from './math.js';
 import { st, ingest, resetLive, startCalib } from './sensor.js';
 import { setDemoSession } from './session.js';
 import { g as game, CANON } from './game.js';
@@ -35,23 +35,28 @@ const spike = (x, w, A) => A * Math.exp(-0.5 * (x / w) * (x / w));
 const toRaw = (a, g) => [...a.map(v => v * 2048), ...g.map(v => v * 16.4)].map(v => Math.round(v));
 const clamp16 = r => r.map(v => Math.max(-32768, Math.min(32767, v)));
 
-// Сигнал дошки для одного трюку; s — секунди від попу
-function trickSignal(tr, s) {
+// Сигнал дошки для одного трюку; s — секунди від попу.
+// Рух задаємо як справжній: розворот — навколо вертикалі, нахил — навколо поперечної осі,
+// фліп — навколо довгої осі дошки. З цього рахуємо, що показали б гіроскоп і акселерометр.
+const qAxis = (ax, deg) => { const h = deg * Math.PI / 360, s = Math.sin(h); return [Math.cos(h), ax[0] * s, ax[1] * s, ax[2] * s]; };
+function pose(tr, s) {
   const T = tr.air, u = s - T;
-  let a = [0, 0, 1];
-  const g = [0, 0, 0];
+  const pitch = turned(s, -.02, .12, -32) + turned(s, .12, .16, 32) + (tr.pitch ? turned(s, .06, .7 * T, tr.pitch) : 0);
+  let roll = tr.roll ? turned(s, .06, .7 * T, tr.roll) : 0;
+  const yaw = tr.yaw ? turned(s, .07, .7 * T, tr.yaw) : 0;
+  // невдала спроба: після приземлення дошку перекидає грипом донизу, а за секунду райдер ставить її назад
+  if (tr.fail) roll += turned(u, .22, .2, 180) + turned(u, 1.6, .4, 180);
+  return qMul(qMul(qAxis([0, 0, 1], yaw), qAxis([0, 1, 0], pitch)), qAxis([1, 0, 0], roll));
+}
+function trickSignal(tr, s) {
+  const T = tr.air, u = s - T, h = 0.0025;
+  const q0 = pose(tr, s - h), q1 = pose(tr, s + h);
+  const d = qMul([q0[0], -q0[1], -q0[2], -q0[3]], q1);              // поворот за 2h в осях дошки
+  const ang = 2 * Math.acos(Math.max(-1, Math.min(1, Math.abs(d[0])))), sn = Math.hypot(d[1], d[2], d[3]) || 1, sg = d[0] < 0 ? -1 : 1;
+  const g = [d[1], d[2], d[3]].map(v => sg * v / sn * ang / (2 * h) * 180 / Math.PI);
+  let a = upOf(pose(tr, s));                                         // гравітація в осях дошки
   if (s > 0.015 && u < -0.005) a = [0, 0, 0];                       // у повітрі — невагомість
   a[2] += spike(s, .015, 4.2) + spike(u, .015, 4.8);                 // удар хвостом (поп) і приземлення
-  g[1] += bump(s, -.02, .12, -32) + bump(s, .12, .16, 32);           // ніс угору на попі, потім вирівнюється
-  if (tr.roll) g[0] += bump(s, .06, .7 * T, tr.roll);
-  if (tr.yaw) g[2] += bump(s, .07, .7 * T, tr.yaw);
-  if (tr.pitch) g[1] += bump(s, .06, .7 * T, tr.pitch);
-  if (tr.fail) {
-    // після приземлення дошку перекидає грипом донизу, а за секунду райдер ставить її назад
-    g[0] += bump(u, .22, .2, 180) + bump(u, 1.6, .4, 180);
-    const phi = (turned(u, .22, .2, 180) + turned(u, 1.6, .4, 180)) * Math.PI / 180;
-    if (u > .22 && u < 2.0) a = [0, Math.sin(phi), Math.cos(phi)];
-  }
   return { a, g };
 }
 

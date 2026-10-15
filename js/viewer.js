@@ -1,7 +1,7 @@
 // Перегляд повтору з таймлайном: відтворення, покадровий крок, перемотування пальцем, швидкість.
 import { $, S, saveSettings, bus } from './util.js';
 import { t, num, trickName } from './i18n.js';
-import { nameOf } from './session.js';
+import { nameOf, landedOf } from './session.js';
 import { buildTrack, hasReplay } from './replay.js';
 import { playTrack, stopReplay, getReplay, rp, setOrbitMode } from './scene.js';
 
@@ -15,7 +15,7 @@ export const viewingId = () => (view ? view.id : null);
 export function openViewer(trick) {
   if (!hasReplay(trick)) return false;
   let tr;
-  try { tr = buildTrack(trick.snip); } catch (e) { console.error(e); return false; }
+  try { tr = buildTrack(trick.snip, landedOf(trick)); } catch (e) { console.error(e); return false; }
   view = { id: trick.id, trick, tr };
   const panel = $('rp');
   panel.hidden = false;

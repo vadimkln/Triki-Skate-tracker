@@ -1,13 +1,12 @@
 // Усе, що бачить користувач: підпис трюку на 3D, останній трюк, список, статистика, налаштування.
 import { $, esc, S, saveSettings, bus, log, logLines } from './util.js';
-import { session, liveTricks, nameOf, landedOf, editTrick, summarize, history, archiveSession, isDemoSession } from './session.js';
-import { TRICK_NAMES } from './tricks.js';
+import { session, liveTricks, nameOf, landedOf, editTrick, summarize, history, archiveSession, isDemoSession, isPreloaded } from './session.js';
+import { TRICK_NAMES, resetYawLearn } from './tricks.js';
 import { st, hz, collectStill } from './sensor.js';
 import { buildMount, V } from './math.js';
 import { t, num, fmtTime, fmtDate, trickName, flagText, reasonText, setLang, lang } from './i18n.js';
 import { hasReplay } from './replay.js';
 import { canFindSaved, isSearching, knownFailed } from './ble.js';
-import { CAL_TRICKS, cal, countOf, startRec, stopRec, deleteLast, clearAll, apply as applyCal, resetCal, exportJson } from './calib.js';
 import { openViewer, viewerOpen, viewingId } from './viewer.js';
 
 // ---------- підпис трюку поверх 3D (у дусі Skate, але тихо) ----------
@@ -95,7 +94,7 @@ function renderLast() {
       <dt>${t('last.impact')}</dt><dd>${num(tr.landG, 1)} g</dd>
     </dl>
     ${tr.flags && tr.flags.length ? `<p class="note">${esc(tr.flags.map(flagText).join('; '))}.</p>` : ''}
-    ${!S.mount && !S.trickCal && !isDemoSession() ? `<p class="note">${esc(t('last.noMount'))}</p>` : ''}
+    ${!S.mount && !isDemoSession() ? `<p class="note">${esc(t('last.noMount'))}</p>` : ''}
     ${hasReplay(tr) ? `<button class="btn small last-replay" data-replay="${tr.id}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16l13-8z"/></svg>${esc(t('last.replay'))}</button>` : ''}`;
 }
 
@@ -148,7 +147,7 @@ function renderStats() {
   $('history').innerHTML = hist.map(x => `<li><span>${esc(t('hist.item', { date: fmtDate(x.start), time: fmtTime(x.start), n: x.attempts, rate: x.rate }))}</span><span>${num(x.maxH)} ${t('unit.cm')}</span></li>`).join('');
 }
 
-export function renderAll() { $('demoNote').hidden = !isDemoSession(); renderLast(); renderList(); renderStats(); }
+export function renderAll() { $('demoNote').hidden = !isDemoSession(); $('preloadNote').hidden = !isPreloaded(); renderLast(); renderList(); renderStats(); }
 
 function showReplay(id) {
   const tr = session.tricks.find(x => x.id === id);
@@ -196,7 +195,7 @@ export function openSheet() {
   sh.hidden = false;
   void sh.offsetHeight;                       // спершу показати, потім запустити виїзд
   sh.classList.add('open'); $('sheetBg').classList.add('open');
-  renderDiag(); renderCal();
+  renderDiag();
 }
 export function closeSheet() {
   const sh = $('sheet');
@@ -209,7 +208,8 @@ export function closeSheet() {
 function renderDiag() {
   $('diag').innerHTML = `${t('diag.rate')}: ${st.source ? num(hz(), 1) + ' ' + t('unit.hz') : '—'}<br>${t('diag.samples')}: ${st.n}<br>` +
     `${t('diag.packets')}: ${Object.entries(st.pktSizes).map(([k, v]) => `${k} ${t('diag.bytes')} (${v})`).join(', ') || '—'}<br>` +
-    `${t('diag.calib')}: ${st.calibInfo ? '1 g = ' + st.calibInfo.lsb : t('diag.calibNo')}`;
+    `${t('diag.calib')}: ${st.calibInfo ? '1 g = ' + st.calibInfo.lsb : t('diag.calibNo')}` +
+    (st.shifted ? `<br>${t('diag.shifted')}: ${st.shifted}` : '');
 }
 
 // майстер положення Triki на дошці
@@ -234,56 +234,11 @@ async function wizardNext() {
   if (wiz.step === 0) { st.bias = s.bias; wiz.step = 1; $('wizText').textContent = t('wiz.2'); return; }
   const tilt = Math.acos(Math.min(1, V.dot(V.norm(wiz.g[0]), V.norm(wiz.g[1])))) * 180 / Math.PI;
   if (tilt < 8) { wiz.g.pop(); $('wizText').textContent = t('wiz.tilt', { deg: num(tilt) }); return; }
-  S.mount = buildMount(wiz.g[0], wiz.g[1]); st.autoMount = null; saveSettings();
+  S.mount = buildMount(wiz.g[0], wiz.g[1]); st.autoMount = null; saveSettings(); resetYawLearn();
   st.q = [1, 0, 0, 0]; wiz = null; $('wizard').hidden = true;
   mountMsg = null; renderMount();
   log(t('log.mount'));
   renderAll();
-}
-
-// калібрування трюків
-let calMsg = null;
-function renderCal() {
-  $('calList').innerHTML = CAL_TRICKS.map(n => {
-    const rec = cal.target === n;
-    return `<li class="cal-row ${rec ? 'rec' : ''}"><span class="cal-n">${esc(n)}</span><span class="cal-c">${esc(t('cal.count', { n: countOf(n) }))}</span>` +
-      `<button class="btn small ${rec ? 'on' : ''}" data-cal="${esc(n)}">${esc(t(rec ? 'cal.stop' : 'cal.rec'))}</button></li>`;
-  }).join('');
-  let msg = cal.target ? t('cal.recording', { trick: cal.target, n: countOf(cal.target) })
-    : calMsg ? calMsg.map(m => t(m.k, m.p)).join(' ') : (S.trickCal ? t('cal.status', { date: fmtDate(S.trickCal.at) + ' ' + fmtTime(S.trickCal.at) }) : t('cal.statusNo'));
-  if (st.source === 'demo') msg += ' ' + t('cal.demo');
-  $('calStatus').textContent = msg;
-  $('bCalReset').hidden = !S.trickCal;
-  $('bCalDel').disabled = !cal.samples.length;
-  $('calBar').hidden = !cal.target;
-  if (cal.target) $('calBarText').textContent = t('cal.bar', { trick: cal.target, n: countOf(cal.target) });
-}
-
-function wireCal() {
-  $('calList').addEventListener('click', e => {
-    const b = e.target.closest('[data-cal]'); if (!b) return;
-    const n = b.dataset.cal;
-    calMsg = null;
-    if (cal.target === n) { stopRec(); return; }
-    startRec(n);
-    closeSheet();
-  });
-  $('calBarStop').onclick = () => stopRec();
-  $('bCalDel').onclick = () => { calMsg = null; deleteLast(); };
-  $('bCalApply').onclick = () => { stopRec(); const r = applyCal(); calMsg = r.msg; renderCal(); renderAll(); };
-  $('bCalReset').onclick = () => { calMsg = null; resetCal(); renderAll(); };
-  $('bCalExport').onclick = () => saveText(`triki_calibration_${stamp()}.json`, exportJson(), 'application/json');
-  const cb = $('bCalClear');
-  cb.onclick = () => {
-    if (!cb.dataset.armed) {
-      cb.dataset.armed = '1'; cb.textContent = t('cal.clearConfirm');
-      setTimeout(() => { delete cb.dataset.armed; cb.textContent = t('cal.clear'); }, 4000);
-      return;
-    }
-    delete cb.dataset.armed; cb.textContent = t('cal.clear');
-    calMsg = null; clearAll();
-  };
-  bus.on('cal', renderCal);
 }
 
 export async function saveText(name, text, mime) {
@@ -327,7 +282,7 @@ export function renderLang() {
   for (const o of $('freq').options) o.textContent = `${o.value} ${t('unit.hz')}`;
   $('lang').value = lang;
   $('bRec').textContent = t(st.rec ? 'b.recStop' : 'b.rec');
-  renderConn(); renderMount(); renderCal(); renderAll(); renderDiag();
+  renderConn(); renderMount(); renderAll(); renderDiag();
   if (bannerKey) banner(bannerKey);
   showSpeed(lastSpeed);
 }
@@ -348,12 +303,14 @@ export function wireSettings(actions) {
   $('bWizard').onclick = wizardStart;
   $('bWizNext').onclick = wizardNext;
   $('bWizCancel').onclick = () => { wiz = null; $('wizard').hidden = true; };
-  $('bMountReset').onclick = () => { S.mount = null; saveSettings(); mountMsg = 'mount.resetDone'; renderMount(); renderAll(); };
+  $('bMountReset').onclick = () => { S.mount = null; saveSettings(); resetYawLearn(); mountMsg = 'mount.resetDone'; renderMount(); renderAll(); };
+  // положення уточнилось за трюками (див. tricks.js → learnYaw)
+  bus.on('mount-yaw', deg => { log(t('log.mountYaw', { deg: num(deg) })); mountMsg = 'mount.auto'; renderMount(); });
   $('bCalib').onclick = actions.calibrate;
   $('bRec').onclick = toggleRec;
   $('bExport').onclick = () => saveText(`triki_session_${stamp()}.json`, JSON.stringify({
     app: 'triki-skate', version: 3, exported: new Date().toISOString(),
-    settings: { mount: S.mount, stance: S.stance, freq: S.freq, accScale: S.accScale, gyroScale: S.gyroScale, trickCal: S.trickCal },
+    settings: { mount: S.mount, stance: S.stance, freq: S.freq, accScale: S.accScale, gyroScale: S.gyroScale },
     device: S.device && S.device.name, bias: st.bias, session,
   }), 'application/json');
   $('bCopy').onclick = async () => { try { await navigator.clipboard.writeText($('exportText').value); log(t('log.copied')); } catch { $('exportText').select(); } };
@@ -378,7 +335,6 @@ export function wireSettings(actions) {
   });
   bus.on('viewer', () => renderList());
   wireList();
-  wireCal();
 }
 
 // «У повітрі» — поки дошка у вільному падінні

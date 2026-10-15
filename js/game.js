@@ -121,10 +121,11 @@ function projected(air) {
 }
 
 // a — прискорення (g), w — кутова швидкість (°/с), обидва в осях Triki
-export function onSample(a, w) {
+export function onSample(a, w, _now, dtIn) {
   if (!g.on) return;
-  const dt = 1 / Math.max(5, st.fs);
-  // власний годинник за кількістю вимірів: Bluetooth приносить їх пачками, і настінний час тут бреше
+  // крок часу дає sensor.js: справжній проміжок між вимірами (Bluetooth приносить їх нерівно)
+  const dt = dtIn != null ? dtIn : 1 / Math.max(5, st.fs);
+  // власний годинник гри — сума цих кроків
   g.clock = (g.clock || 0) + dt;
   const now = g.clock * 1000;
   // гіроскоп упирається в ±2000 °/с — у такі моменти обертання насправді швидше

@@ -49,7 +49,6 @@ export const S = Object.assign({
   lang: null,          // null — за мовою телефона
   device: null,        // збережений Triki: { id, name }
   autoConnect: true,   // підключатись до збереженого Triki при відкритті сайту
-  trickCal: null,      // калібрування трюків: осі фліпа й shuvit у координатах Triki
   mode: 'tracker',     // 'tracker' — датчик на дошці, 'game' — гра з Triki в руці
   gameMode: 'free',    // 'free' або 'skate'
   gameBest: 0, gameBestCombo: 0,

@@ -21,8 +21,15 @@ export function setDemoSession(on) {
   bus.emit('session');
 }
 
+// Готова сесія (наприклад, записи реальних спроб у демо-версії): показуємо, але не зберігаємо
+export function usePreloaded(sess) {
+  session = { ...sess, preloaded: true };
+  bus.emit('session');
+}
+export const isPreloaded = () => !!session.preloaded;
+
 export function saveSession() {
-  if (realSession) return;                       // демо-сесію не зберігаємо
+  if (realSession || session.preloaded) return;  // демо-сесію й готові записи не зберігаємо
   if (store.set('session', session)) return;
   // місце закінчилось — прибираємо сирі дані найстаріших трюків
   for (const t of session.tricks) { if (t.snip) { delete t.snip; if (store.set('session', session)) return; } }
