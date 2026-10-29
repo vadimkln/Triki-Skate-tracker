@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;700&family=Fira+Sans+Extra+Condensed:ital,wght@0,600;0,800;1,800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/app.css?v=20261015d">
+<link rel="stylesheet" href="css/app.css?v=20261029a">
 </head>
 <body>
 <!--BODY-->
@@ -162,7 +162,9 @@
     </div>
     <label class="opt"><span data-i18n="opt.autoConnect"></span><input type="checkbox" id="autoConnect"></label>
     <label class="opt"><span data-i18n="opt.freq"></span>
-      <select id="freq"><option value="104">104</option><option value="208">208</option><option value="416">416</option><option value="52">52</option></select></label>
+      <select id="freq"><option value="104">104</option><option value="52">52</option><option value="20">20</option><option value="10">10</option><option value="5">5</option></select></label>
+    <p class="note" id="rateInfo"></p>
+    <div class="btns"><button class="btn small" id="bRateTest" data-i18n="b.rateTest" disabled>Тест швидкості</button></div>
     <label class="opt"><span data-i18n="opt.keepalive"></span><input type="checkbox" id="keepalive"></label>
     <label class="opt"><span data-i18n="opt.autoRe"></span><input type="checkbox" id="autoRe"></label>
   </div>
@@ -212,6 +214,6 @@
 <!--/BODY-->
 
 <noscript><p style="padding:16px">JavaScript is required.</p></noscript>
-<script src="app.js?v=20261015d" defer></script>
+<script src="app.js?v=20261029a" defer></script>
 </body>
 </html>

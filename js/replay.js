@@ -36,20 +36,35 @@ export function buildTrack(snip, landed = true) {
   const calm = k => spin[k] < 120 && amag[k] > 0.8 && amag[k] < 1.25;
   const step = (q, k, kp) => mahony(q, gB[k].map(v => v * RAD), kp ? aB[k] : [0, 0, 0], dtk(k), kp || 2);
 
-  // 1) до попу: гравітація + гіроскоп (швидко довіряємо гравітації, коли дошка спокійна)
-  let m0 = 1; while (m0 < pop && T[m0] - T[0] < 0.15) m0++;
-  let a0 = [0, 0, 0];
-  for (let k = 0; k < m0; k++) a0 = V.add(a0, aB[k]);
-  let q = V.len(a0) / m0 > 0.5 ? qFromUp(a0) : IDQ;
+  // 1) до попу дошка котиться по землі — лежить рівно на колесах (як і на живій сцені); від гіроскопа
+  //    беремо лише курс. Останні 0,15 с перед ударом хвостом — уже вільно: на швидких вимірах тут видно,
+  //    як задня нога тисне хвіст і ніс іде вгору.
+  const real = !snip.synth;
+  const flat = q => qMul(q, qFromTo([0, 0, 1], upOf(q)));
+  let q = IDQ;
   const qs = new Array(n);
-  for (let k = 0; k < pop; k++) { qs[k] = q; q = step(q, k, calm(k) ? 8 : 2); }
+  for (let k = 0; k < pop; k++) {
+    qs[k] = q;
+    q = step(q, k, 0);
+    if (real && T[pop] - T[k + 1] > 0.15) q = flat(q);
+  }
 
-  // 2) політ: лише гіроскоп (акселерометр тут показує удари й відцентрові сили)
-  for (let k = pop; k < land; k++) { qs[k] = q; q = step(q, k, 0); }
+  // 2) політ: лише гіроскоп (акселерометр тут показує удари й сили від ніг). Між двома вимірами
+  //    кутова швидкість змінюється плавно, тож беремо середню (трапеція) — при 10–25 вимірах на секунду
+  //    це помітно точніше
+  const rot = [0];
+  for (let k = pop; k < land; k++) {
+    qs[k] = q;
+    const w = real ? V.mul(V.add(gB[k], gB[k + 1]), 0.5) : gB[k];
+    q = mahony(q, w.map(v => v * RAD), [0, 0, 0], dtk(k), 0);
+    rot.push(rot[rot.length - 1] + V.len(w) * dtk(k));
+  }
 
   // 3) поправка. При 10–25 вимірах на секунду й обертанні 1000+ °/с гіроскоп за політ помиляється на десятки градусів.
   //    Вдале приземлення — дошка колесами вниз; невдале — нахил беремо з середньої гравітації після удару.
-  //    Похибку розподіляємо на політ, щоб у мить приземлення дошка стояла рівно на чотирьох колесах.
+  //    Похибка гіроскопа набігає там, де дошка швидко крутиться, тож і поправку розподіляємо за накопиченим
+  //    обертанням, а не рівно в часі: спокійні ділянки польоту (наприклад, коли ніс опущено й дошка так летить)
+  //    лишаються такими, як їх виміряв сенсор.
   let target = null;
   if (landed) target = [0, 0, 1];
   else {
@@ -58,8 +73,11 @@ export function buildTrack(snip, landed = true) {
     if (c && V.len(m) / c > 0.6) target = V.norm(m);
   }
   if (target) {
-    const corr = qFromTo(target, upOf(q)), span = Math.max(1e-3, T[land] - T[pop]);
-    for (let k = pop; k < land; k++) qs[k] = qMul(qs[k], slerp(IDQ, corr, (T[k] - T[pop]) / span));
+    const corr = qFromTo(target, upOf(q)), total = rot[rot.length - 1], span = Math.max(1e-3, T[land] - T[pop]);
+    for (let k = pop; k < land; k++) {
+      const u = total > 20 ? rot[k - pop] / total : (T[k] - T[pop]) / span;
+      qs[k] = qMul(qs[k], slerp(IDQ, corr, u));
+    }
     q = qMul(q, corr);
   }
 

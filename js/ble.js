@@ -220,6 +220,44 @@ export async function restartStream() {
   st.arrivals = []; st.connectedAt = performance.now();
 }
 
+// Тест швидкості. Число в команді старту — не герци, а інтервал між пакетами (приблизно в мілісекундах):
+// на ПК 104 давало ~10 вимірів/с, 20 — ~48, 10 — ~90, 5 — ~113. Скільки реально доходить до телефона,
+// залежить від нього й від браузера — тож міряємо на місці і лишаємо найкраще.
+export const RATE_VALUES = [104, 52, 20, 10, 5];
+export const isTestingRate = () => !!ble.testing;
+export async function rateTest(onStep) {
+  if (st.source !== 'ble' || ble.testing) return null;
+  ble.testing = true;
+  const keep = S.freq, res = [];
+  try {
+    for (const [i, v] of RATE_VALUES.entries()) {
+      if (onStep) onStep(i, RATE_VALUES.length);
+      S.freq = v; await restartStream(); await sleep(700);
+      st.rateProbe = []; await sleep(2500);
+      const ts = st.rateProbe; st.rateProbe = null;
+      let holes = 0, gap = 0;
+      for (let k = 1; k < ts.length; k++) { const d = (ts[k] - ts[k - 1]) / 1000; if (d > 0.2) holes++; gap = Math.max(gap, d); }
+      const r = { v, hz: ts.length / 2.5, holes: ts.length > 1 ? holes / (ts.length - 1) : 1, gap: ts.length > 1 ? gap : 2.5 };
+      res.push(r);
+      log(t('log.rateStep', { v, hz: r.hz.toFixed(1), holes: Math.round(r.holes * 100), gap: r.gap.toFixed(2) }));
+      if (!ble.device || !ble.device.gatt.connected) throw new Error('disconnected');
+    }
+    // найшвидше без дірок; з майже однаково швидких — те, що менше навантажує Bluetooth
+    const ok = res.filter(r => r.gap < 0.4 && r.holes < 0.05), pool = ok.length ? ok : res;
+    const max = Math.max(...pool.map(r => r.hz));
+    const best = pool.filter(r => r.hz >= 0.9 * max).sort((a, b) => b.v - a.v)[0];
+    S.freq = best.v; saveSettings();
+    await restartStream();
+    log(t('log.rateBest', { v: best.v, hz: best.hz.toFixed(0) }));
+    return { res, best, before: res.find(r => r.v === keep) || null };
+  } catch (e) {
+    S.freq = keep; saveSettings();
+    try { await restartStream(); } catch {}
+    log(t('rate.failed', { e: e.message }));
+    return { error: e.message };
+  } finally { ble.testing = false; st.rateProbe = null; }
+}
+
 export async function disconnect() {
   ble.want = false;
   stopSearch();

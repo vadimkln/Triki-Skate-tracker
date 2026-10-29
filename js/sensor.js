@@ -82,6 +82,7 @@ export function ingest(raw, now, boardFrame) {
   if (st.rec) st.rec.rows.push([((now - st.rec.t0) / 1000).toFixed(4), ...raw]);
   if (!boardFrame && isShifted(raw)) { st.shifted = (st.shifted || 0) + 1; return; }
   st.n++;
+  if (st.rateProbe) st.rateProbe.push(now);           // тест швидкості (ble.js)
   if (st.calib) st.calib.push(raw.slice());
   if (st.collect) st.collect.push(raw.slice());
   st.arrivals.push(now);
@@ -108,8 +109,11 @@ export function ingest(raw, now, boardFrame) {
   const gmag = V.len(g);
   if (amag >= 2.6) st.lastImpact = now;
   if (gmag > 200 && amag < 3.5) st.lastSpinT = now;
-  st.lowRun = a[2] < 0.35 || amag < 0.5 ? (st.lowRun || 0) + 1 : 0;
-  if (!st.airSince && now - (st.lastTakeoff || -1e9) > 800 && now - (st.lastImpact || -1e9) < 350 && now - (st.lastSpinT || -1e9) < 250 && st.lowRun >= 2) {
+  // колеса не тримаються за землю щонайменше два виміри поспіль і не менше 30 мс (на швидких вимірах два — це замало)
+  const unsup = a[2] < 0.35 || amag < 0.5;
+  if (unsup && !st.lowRun) st.lowSince = now;
+  st.lowRun = unsup ? (st.lowRun || 0) + 1 : 0;
+  if (!st.airSince && now - (st.lastTakeoff || -1e9) > 800 && now - (st.lastImpact || -1e9) < 350 && now - (st.lastSpinT || -1e9) < 250 && st.lowRun >= 2 && now - st.lowSince >= 30) {
     st.airSince = now; st.lastTakeoff = now; bus.emit('takeoff');
   } else if (st.airSince && ((amag >= 2 && a[2] > 0.5) || now - st.airSince > 1200)) {
     st.airSince = null; st.aLP = [0, 0, 1];            // приземлились: «верх» рахуємо заново, без сил польоту

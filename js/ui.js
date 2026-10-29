@@ -6,7 +6,7 @@ import { st, hz, collectStill } from './sensor.js';
 import { buildMount, V } from './math.js';
 import { t, num, fmtTime, fmtDate, trickName, flagText, reasonText, setLang, lang } from './i18n.js';
 import { hasReplay } from './replay.js';
-import { canFindSaved, isSearching, knownFailed } from './ble.js';
+import { canFindSaved, isSearching, knownFailed, rateTest, isTestingRate } from './ble.js';
 import { openViewer, viewerOpen, viewingId } from './viewer.js';
 
 // ---------- підпис трюку поверх 3D (у дусі Skate, але тихо) ----------
@@ -54,6 +54,7 @@ export function renderConn() {
   $('bDemo').textContent = t(demo ? 'b.demoExit' : 'b.demo');
   $('bDemo').classList.toggle('on', demo);
   $('bDisconnect').disabled = !st.source && !isSearching();
+  renderRate();
   $('bForget').hidden = !dev;
   $('bConnect').textContent = dev ? t('cta.connectSaved', { name: dev.name }) : t('cta.connect');
   $('ctaHint').textContent = dev ? t('cta.hintSaved', { name: dev.name }) : t('cta.hintFirst');
@@ -279,12 +280,29 @@ export function toggleRec() {
 
 // перемальовує все, що залежить від мови
 export function renderLang() {
-  for (const o of $('freq').options) o.textContent = `${o.value} ${t('unit.hz')}`;
+  for (const o of $('freq').options) o.textContent = o.value === '104' ? `104 · ${t('freq.std')}` : o.value;
+  renderRate();
   $('lang').value = lang;
   $('bRec').textContent = t(st.rec ? 'b.recStop' : 'b.rec');
   renderConn(); renderMount(); renderAll(); renderDiag();
   if (bannerKey) banner(bannerKey);
   showSpeed(lastSpeed);
+}
+
+// тест швидкості: скільки вимірів на секунду реально доходить до телефона
+let rateMsg = null;
+function renderRate() {
+  $('rateInfo').textContent = rateMsg ? (typeof rateMsg === 'string' ? t(rateMsg) : t(rateMsg.k, rateMsg.p)) : t('rate.p');
+  $('bRateTest').disabled = st.source !== 'ble' || isTestingRate();
+}
+async function runRateTest() {
+  if (st.source !== 'ble') { rateMsg = 'rate.needConn'; renderRate(); return; }
+  const r = await rateTest((i, n) => { rateMsg = { k: 'rate.running', p: { i: i + 1, n } }; renderRate(); });
+  if (!r) return;
+  if (r.error) rateMsg = { k: 'rate.failed', p: { e: r.error } };
+  else rateMsg = { k: 'rate.result', p: { v: r.best.v, hz: num(r.best.hz, 0), hz0: r.before ? num(r.before.hz, 0) : '—' } };
+  if (!r.error) $('freq').value = String(S.freq);
+  renderRate(); renderDiag();
 }
 
 export function wireSettings(actions) {
@@ -320,7 +338,11 @@ export function wireSettings(actions) {
   $('freq').value = String(S.freq); $('keepalive').checked = S.keepalive; $('autoRe').checked = S.autoRe;
   $('beep').checked = S.beep; $('gps').checked = S.gps; $('stance').value = S.stance; $('autoConnect').checked = S.autoConnect;
   $('lang').onchange = e => setLang(e.target.value);
-  $('freq').onchange = e => { S.freq = +e.target.value; saveSettings(); actions.restartStream(); };
+  // якщо збережено старе значення, якого вже немає в списку (208, 416), — додаємо його, щоб не губилось
+  if (![...$('freq').options].some(o => +o.value === S.freq)) $('freq').add(new Option(String(S.freq), String(S.freq)));
+  $('freq').value = String(S.freq);
+  $('freq').onchange = e => { S.freq = +e.target.value; saveSettings(); rateMsg = null; renderRate(); actions.restartStream(); };
+  $('bRateTest').onclick = runRateTest;
   $('keepalive').onchange = e => { S.keepalive = e.target.checked; saveSettings(); };
   $('autoRe').onchange = e => { S.autoRe = e.target.checked; saveSettings(); };
   $('autoConnect').onchange = e => { S.autoConnect = e.target.checked; saveSettings(); };
